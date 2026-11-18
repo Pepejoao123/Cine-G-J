@@ -6,7 +6,7 @@
 <title>Cine G+J 💕</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <style>
 :root{
   --bg1:#14060d; --bg2:#2a0b1b; --wine:#4a1029; --rose:#ff4d79; --rose2:#ff8fab;
@@ -195,6 +195,22 @@ header .sp{flex:1}
   header .logo{font-size:32px}
   .react-bar{order:-1;width:100%;justify-content:center;flex-wrap:wrap}
 }
+.adv{margin-top:18px;text-align:left;font-size:13px;color:var(--muted)}
+.adv summary{cursor:pointer;color:var(--rose2)}
+.adv p{margin:8px 0;line-height:1.4;font-size:12px}
+.adv input{width:100%;margin-bottom:6px;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:13px;outline:none}
+.adv .btn-ghost{padding:8px 14px}
+.online{min-height:20px;font-size:13px;color:var(--rose2);margin-bottom:12px}
+.rooms-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;text-align:left}
+.room-list{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;text-align:left}
+.room{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:rgba(0,0,0,.28);border:1px solid var(--line)}
+.room .ri{flex:1;min-width:0}
+.room b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.room small{color:var(--muted);font-size:12px}
+.room button{padding:9px 16px;border-radius:12px;font-weight:700;background:linear-gradient(135deg,var(--rose),#c2185b)}
+.room button:disabled{background:#4a2333;opacity:.7}
+.room-empty{padding:18px;text-align:center;color:var(--muted);font-style:italic;font-size:14px;border:1px dashed var(--line);border-radius:16px}
+.link{background:none;color:var(--muted);font-size:12px;margin-top:14px;text-decoration:underline}
 </style>
 </head>
 <body>
@@ -207,21 +223,45 @@ header .sp{flex:1}
     <div class="strip"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div class="logo">Cine<b>G+J</b></div>
     <p class="tagline">onde a distância vira só um detalhe</p>
-    <div class="field">
-      <label>Seu nome</label>
-      <input id="inName" maxlength="20" placeholder="Como seu amor te chama?">
-    </div>
-    <div class="field">
-      <label>Código da nossa sala</label>
-      <div class="code-row">
-        <input id="inCode" maxlength="24" placeholder="ex.: gj-a7k3p9">
-        <button class="btn-ghost" id="btnGen" type="button">Gerar</button>
-        <button class="btn-ghost" id="btnCopyLink" type="button" title="Copiar link">🔗</button>
+
+    <!-- passo 1: identificação -->
+    <div id="stepLogin">
+      <div class="field">
+        <label>Seu nome</label>
+        <input id="inName" maxlength="20" placeholder="Como seu amor te chama?">
       </div>
+      <div class="field">
+        <label>Palavra secreta do casal</label>
+        <input id="inSecret" type="password" maxlength="60" placeholder="A mesma pra vocês dois 🤫">
+      </div>
+      <button class="btn-main" id="btnLogin">Abrir nosso cinema 💕</button>
+      <details class="adv">
+        <summary>⚙️ Conexão avançada (servidor TURN)</summary>
+        <p>Use se o vídeo não conectar em alguma rede. Crie uma conta grátis em metered.ca e cole aqui os dados de TURN (os dois precisam preencher igual).</p>
+        <input id="turnUrl" placeholder="turn:xxx.relay.metered.ca:80,turns:xxx.relay.metered.ca:443">
+        <input id="turnUser" placeholder="usuário">
+        <input id="turnPass" type="password" placeholder="senha">
+        <button class="btn-ghost" id="btnTurnSave" type="button">Salvar</button>
+      </details>
     </div>
-    <button class="btn-main" id="btnEnter">Entrar no nosso cinema 💕</button>
+
+    <!-- passo 2: salas ativas -->
+    <div id="stepRooms" class="hidden">
+      <div class="online" id="onlineBox"></div>
+      <div class="rooms-head"><span>Salas ativas</span><span class="dot wait" id="brokerDot"></span></div>
+      <div id="roomList" class="room-list"></div>
+      <div class="field" style="margin-top:16px">
+        <label>Criar nova sala</label>
+        <div class="code-row">
+          <input id="inRoomName" maxlength="40" placeholder="Sessão de hoje 🍿">
+          <button class="btn-ghost" id="btnCreate" type="button" style="padding:0 18px;font-weight:700">Criar</button>
+        </div>
+      </div>
+      <button class="link" id="btnLogout" type="button">trocar nome ou palavra secreta</button>
+    </div>
+
     <div id="lobbyStatus"></div>
-    <p class="hint">Vocês dois usam o <b>mesmo código</b>. Quem chegar primeiro abre a sala, e o outro entra direto.<br>Dica: usem fone de ouvido pra não dar eco 🎧</p>
+    <p class="hint">Só aparecem as salas de quem usa a <b>mesma palavra secreta</b>, e tudo vai criptografado.<br>Usem fone de ouvido pra não dar eco 🎧</p>
   </div>
 </section>
 
@@ -231,6 +271,7 @@ header .sp{flex:1}
     <div class="logo">Cine<b>G+J</b></div>
     <div class="pill"><span class="dot wait" id="connDot"></span><span id="connText">Esperando seu amor…</span></div>
     <div class="pill">🎟️ <span id="roomCode"></span></div>
+    <div class="pill"><span class="dot wait" id="videoDot"></span><span id="videoText">vídeo: aguardando</span></div>
     <div class="sp"></div>
     <button class="hbtn" id="btnRanking">🏆 Nosso ranking</button>
   </header>
@@ -275,7 +316,7 @@ header .sp{flex:1}
     <div class="vol hidden" id="volBox" title="Volume do filme">🔊<input type="range" id="vol" min="0" max="1" step="0.05" value="1"></div>
     <button class="btn-rate" id="btnRate">⭐ Avaliar</button>
     <button class="cbtn" id="btnFull" data-tip="Tela cheia">⛶</button>
-    <button class="cbtn btn-leave" id="btnLeave" data-tip="Sair">🚪</button>
+    <button class="cbtn btn-leave" id="btnLeave" data-tip="Sair da sala">🚪</button>
   </div>
 </section>
 
@@ -324,25 +365,25 @@ header .sp{flex:1}
 
 <script>
 const $ = s => document.querySelector(s);
-const PREFIX = 'cinegj-v1-';
-const ICE = { iceServers: [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:global.stun.twilio.com:3478' }
-]};
+const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081'];
 const REACTIONS = ['❤️','😂','😱','😭','😍','🔥','🍿','😴','🤯','💋'];
+const FRESH_MS = 60000;
 
 function load(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
 function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function rid(n){ const c='abcdefghjkmnpqrstuvwxyz23456789'; let s=''; for(let i=0;i<n;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
 
 const S = {
-  me: '', partner: '', room: '', hostId: '', isHost: false,
-  peer: null, conn: null, remoteId: null,
-  local: null, screen: null, camCall: null, screenCall: null, remoteScreenCall: null,
+  id: rid(10), me: '', ns: '', key: null, mq: null, brokerIdx: 0,
+  presence: {},              // clientId -> {name, room, roomName, ts, seen}
+  room: null, roomName: '', inRoom: false,
+  partnerId: null, partner: '', partnerCamId: null, remoteScreenId: null,
+  pc: null, polite: false, makingOffer: false, ignoreOffer: false, remoteStreams: {},
+  local: null, screen: null, screenSenders: [],
   stageMode: 'none', mic: true, cam: true, noCam: false,
   partnerStatus: { mic: true, cam: true },
   rank: load('cinegj-ranking', { items: [], deleted: [] }),
-  rating: null, filter: 'all', attempts: 0, inRoom: false, leaving: false
+  rating: null, filter: 'all'
 };
 
 /* ---------- fundo de corações ---------- */
@@ -359,42 +400,170 @@ const S = {
   }
 })();
 
-function toast(msg){
-  const d = document.createElement('div'); d.textContent = msg;
-  $('#toast').appendChild(d); setTimeout(()=>d.remove(), 3600);
+function toast(msg){ const d = document.createElement('div'); d.textContent = msg; $('#toast').appendChild(d); setTimeout(()=>d.remove(), 4000); }
+function lobbyStatus(t){ $('#lobbyStatus').textContent = t; }
+function esc(s){ const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
+/* ---------- criptografia (AES-GCM com a palavra secreta) ---------- */
+const TE = new TextEncoder(), TD = new TextDecoder();
+function b64(u8){ let s=''; for(let i=0;i<u8.length;i+=0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i+0x8000)); return btoa(s); }
+function unb64(str){ const s = atob(str); const u = new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i] = s.charCodeAt(i); return u; }
+async function setupCrypto(secret){
+  const base = await crypto.subtle.importKey('raw', TE.encode(secret), 'PBKDF2', false, ['deriveKey']);
+  S.key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: TE.encode('cine-gj-salt-v2'), iterations: 120000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', TE.encode('cinegj-ns|' + secret)));
+  S.ns = 'cinegj2/' + [...h.slice(0, 10)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
-function send(obj){ if(S.conn && S.conn.open){ try{ S.conn.send(obj); }catch(e){} } }
-function connected(){ return !!(S.conn && S.conn.open); }
+async function encrypt(obj){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, S.key, TE.encode(JSON.stringify(obj))));
+  const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12); return b64(out);
+}
+async function decrypt(str){
+  const u = unb64(str);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u.slice(0, 12) }, S.key, u.slice(12));
+  return JSON.parse(TD.decode(pt));
+}
+
+/* ---------- MQTT (lobby, mensagens e sinalização) ---------- */
+let pubChain = Promise.resolve(), recvChain = Promise.resolve();
+function pub(topic, obj, opts = {}){
+  pubChain = pubChain.then(async () => {
+    if(!S.mq) return;
+    const payload = await encrypt(obj);
+    S.mq.publish(topic, payload, { qos: 1, ...opts });
+  }).catch(e => console.warn('pub', e));
+  return pubChain;
+}
+const T = {
+  pres: id => `${S.ns}/p/${id}`,
+  presAll: () => `${S.ns}/p/+`,
+  msg: room => `${S.ns}/r/${room}/m`,
+  sig: (room, to) => `${S.ns}/r/${room}/s/${to}`
+};
+
+function connectBroker(){
+  if(typeof mqtt === 'undefined'){ lobbyStatus('Não consegui carregar a conexão. Verifique a internet e recarregue.'); return; }
+  if(S.mq){ try{ S.mq.end(true); }catch(e){} }
+  const url = BROKERS[S.brokerIdx % BROKERS.length];
+  lobbyStatus('Conectando…');
+  const c = mqtt.connect(url, {
+    clientId: 'cgj_' + S.id, clean: true, keepalive: 20, reconnectPeriod: 3000, connectTimeout: 8000,
+    will: { topic: T.pres(S.id), payload: '', retain: true, qos: 1 }
+  });
+  S.mq = c;
+  let ok = false;
+  const fail = setTimeout(() => { if(!ok){ S.brokerIdx++; connectBroker(); } }, 10000);
+  c.on('connect', () => {
+    ok = true; clearTimeout(fail);
+    $('#brokerDot').className = 'dot on';
+    lobbyStatus('');
+    c.subscribe(T.presAll(), { qos: 1 });
+    if(S.room) subscribeRoom(S.room);
+    publishPresence();
+  });
+  c.on('reconnect', () => { $('#brokerDot').className = 'dot wait'; });
+  c.on('offline', () => { $('#brokerDot').className = 'dot wait'; if(S.inRoom) setChatState(false); });
+  c.on('error', e => console.warn('mqtt', e));
+  c.on('message', (topic, payload) => {
+    recvChain = recvChain.then(() => onMqtt(topic, payload.toString())).catch(e => console.warn('recv', e));
+  });
+}
+function subscribeRoom(room){ S.mq.subscribe([T.msg(room), T.sig(room, S.id)], { qos: 1 }); }
+function unsubscribeRoom(room){ try{ S.mq.unsubscribe([T.msg(room), T.sig(room, S.id)]); }catch(e){} }
+function publishPresence(){
+  if(!S.mq || !S.mq.connected) return;
+  pub(T.pres(S.id), { name: S.me, room: S.room, roomName: S.roomName, ts: Date.now() }, { retain: true });
+  if(S.inRoom) setChatState(true);
+}
+setInterval(publishPresence, 15000);
+setInterval(() => {   // limpa quem sumiu
+  const now = Date.now(); let changed = false;
+  for(const [id, p] of Object.entries(S.presence)) if(now - p.seen > FRESH_MS){ delete S.presence[id]; changed = true; }
+  if(changed){ renderRooms(); checkPartner(); }
+}, 10000);
+
+async function onMqtt(topic, str){
+  const parts = topic.split('/');
+  // presença: ns/p/<id>
+  if(parts[2] === 'p'){
+    const id = parts[3]; if(id === S.id) return;
+    if(!str){ delete S.presence[id]; renderRooms(); checkPartner(); return; }
+    let p; try{ p = await decrypt(str); }catch(e){ return; }
+    if(Math.abs(Date.now() - (p.ts || 0)) > FRESH_MS * 1.5) return; // registro velho
+    p.seen = Date.now(); S.presence[id] = p;
+    renderRooms(); checkPartner();
+    return;
+  }
+  if(parts[2] !== 'r' || parts[3] !== S.room) return;
+  let d; try{ d = await decrypt(str); }catch(e){ return; }
+  if(!d || d.from === S.id) return;
+  if(parts[4] === 's') await onSignal(d);
+  else onData(d);
+}
 
 /* ---------- LOBBY ---------- */
-function genCode(){ const c='abcdefghjkmnpqrstuvwxyz23456789'; let s='gj-'; for(let i=0;i<6;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
-function cleanCode(v){ return v.trim().toLowerCase().replace(/[^a-z0-9-]/g,''); }
 $('#inName').value = load('cinegj-name', '');
-$('#inCode').value = cleanCode(location.hash.slice(1)) || load('cinegj-room', '');
-$('#btnGen').onclick = () => { $('#inCode').value = genCode(); };
-$('#btnCopyLink').onclick = async () => {
-  const code = cleanCode($('#inCode').value); if(!code){ toast('Gere ou digite um código primeiro'); return; }
-  const link = location.protocol.startsWith('http') ? location.origin + location.pathname + '#' + code : code;
-  try{ await navigator.clipboard.writeText(link); toast('Copiado! Manda pro seu amor 💌'); }catch(e){ toast(link); }
+$('#inSecret').value = load('cinegj-secret', '');
+const turn = load('cinegj-turn', {});
+$('#turnUrl').value = turn.url || ''; $('#turnUser').value = turn.user || ''; $('#turnPass').value = turn.pass || '';
+$('#btnTurnSave').onclick = () => {
+  store('cinegj-turn', { url: $('#turnUrl').value.trim(), user: $('#turnUser').value.trim(), pass: $('#turnPass').value });
+  toast('Servidor TURN salvo ✔');
 };
-function lobbyStatus(t){ $('#lobbyStatus').textContent = t; }
-
-$('#btnEnter').onclick = async () => {
-  const name = $('#inName').value.trim();
-  let code = cleanCode($('#inCode').value);
-  if(!name){ lobbyStatus('Coloca seu nome 💕'); $('#inName').focus(); return; }
-  if(code.length < 4){ lobbyStatus('Use um código com pelo menos 4 caracteres (ou clique em Gerar)'); return; }
-  if(typeof Peer === 'undefined'){ lobbyStatus('Não consegui carregar a conexão. Verifique a internet e recarregue.'); return; }
-  S.me = name; S.room = code; S.hostId = PREFIX + code;
-  store('cinegj-name', name); store('cinegj-room', code);
-  $('#btnEnter').disabled = true;
-  lobbyStatus('Ligando câmera e microfone…');
-  S.local = await getLocalMedia();
-  lobbyStatus('Procurando seu amor na sala…');
-  S.attempts = 0;
-  tryJoin();
+$('#btnLogin').onclick = login;
+$('#inSecret').addEventListener('keydown', e => { if(e.key === 'Enter') login(); });
+async function login(){
+  const name = $('#inName').value.trim(), secret = $('#inSecret').value;
+  if(!name){ lobbyStatus('Coloca seu nome 💕'); return; }
+  if(secret.length < 4){ lobbyStatus('A palavra secreta precisa ter pelo menos 4 caracteres'); return; }
+  if(!window.crypto || !crypto.subtle){ lobbyStatus('Abra pelo Chrome/Edge em um endereço https (ou o arquivo direto no computador).'); return; }
+  S.me = name; store('cinegj-name', name); store('cinegj-secret', secret);
+  $('#btnLogin').disabled = true;
+  await setupCrypto(secret);
+  $('#stepLogin').classList.add('hidden'); $('#stepRooms').classList.remove('hidden');
+  renderRooms();
+  connectBroker();
+}
+$('#btnLogout').onclick = () => {
+  store('cinegj-secret', '');
+  if(S.mq){ S.mq.publish(T.pres(S.id), '', { retain: true, qos: 1 }); }
+  setTimeout(() => location.reload(), 300);
 };
+$('#btnCreate').onclick = () => {
+  const name = $('#inRoomName').value.trim() || 'Sessão de hoje 🍿';
+  joinRoom(rid(8), name);
+};
+$('#inRoomName').addEventListener('keydown', e => { if(e.key === 'Enter') $('#btnCreate').click(); });
+if($('#inName').value && $('#inSecret').value) login();   // entra direto se já tiver salvo
 
+function roomsMap(){
+  const rooms = {};
+  for(const [id, p] of Object.entries(S.presence)){
+    if(!p.room) continue;
+    (rooms[p.room] ||= { id: p.room, name: p.roomName || 'Sala', people: [] }).people.push(p.name);
+  }
+  return rooms;
+}
+function renderRooms(){
+  const online = Object.values(S.presence).map(p => p.name);
+  $('#onlineBox').innerHTML = online.length ? `💗 Online agora: <b>${online.map(esc).join(', ')}</b>` : 'Ninguém mais online por enquanto…';
+  const box = $('#roomList'); box.innerHTML = '';
+  const rooms = Object.values(roomsMap());
+  if(!rooms.length){ box.innerHTML = '<div class="room-empty">Nenhuma sala ativa. Crie uma e espere seu amor entrar 💌</div>'; return; }
+  rooms.forEach(r => {
+    const full = r.people.length >= 2;
+    const el = document.createElement('div'); el.className = 'room';
+    el.innerHTML = `<div style="font-size:26px">🎬</div><div class="ri"><b></b><small></small></div><button ${full ? 'disabled' : ''}>${full ? 'Cheia' : 'Entrar'}</button>`;
+    el.querySelector('b').textContent = r.name;
+    el.querySelector('small').textContent = (full ? '💑 ' : '⏳ ') + r.people.join(' e ') + (full ? ' assistindo' : ' esperando você');
+    el.querySelector('button').onclick = () => joinRoom(r.id, r.name);
+    box.appendChild(el);
+  });
+}
+
+/* ---------- MÍDIA LOCAL ---------- */
 async function getLocalMedia(){
   const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
   try{
@@ -421,166 +590,167 @@ function withBlankVideo(stream){
   return stream;
 }
 
-/* ---------- CONEXÃO (PeerJS) ---------- */
-function destroyPeer(){ if(S.peer){ try{ S.peer.destroy(); }catch(e){} S.peer = null; } }
-
-function tryJoin(){
-  if(++S.attempts > 6){
-    lobbyStatus('Não consegui conectar. Confira a internet e tente de novo.');
-    $('#btnEnter').disabled = false; return;
+/* ---------- ENTRAR / SAIR DA SALA ---------- */
+async function joinRoom(id, name){
+  if(!S.mq || !S.mq.connected){ toast('Ainda conectando… tente em instantes'); return; }
+  if(!S.local){
+    lobbyStatus('Ligando câmera e microfone…');
+    S.local = await getLocalMedia();
+    lobbyStatus('');
   }
-  destroyPeer();
-  const p = new Peer({ config: ICE, debug: 1 });
-  S.peer = p; S.isHost = false;
-  let timer;
-  p.on('open', () => {
-    const c = p.connect(S.hostId, { reliable: true });
-    setupConn(c);
-    timer = setTimeout(() => { if(!c.open && S.peer === p){ lobbyStatus('Demorando… tentando de novo'); tryJoin(); } }, 15000);
-    c.on('open', () => clearTimeout(timer));
-  });
-  p.on('error', err => {
-    clearTimeout(timer);
-    if(err.type === 'peer-unavailable'){ becomeHost(); }
-    else peerError(err);
-  });
-  p.on('call', handleCall);
+  S.room = id; S.roomName = name; S.inRoom = true;
+  subscribeRoom(id);
+  publishPresence();
+  $('#lobby').classList.add('hidden'); $('#room').classList.remove('hidden');
+  $('#roomCode').textContent = name;
+  $('#myName').textContent = S.me + ' (você)';
+  $('#myCam').srcObject = S.local;
+  refreshToggles();
+  $('#chatLog').innerHTML = '';
+  addChat(null, 'Bem-vindo(a) ao Cine G+J 💕');
+  setConn(false); setVideo('aguardando');
+  sendHello(false);
+  checkPartner();
+}
+function leaveRoom(){
+  send({ t: 'bye' });
+  stopShare(true);
+  closePC();
+  if(S.room) unsubscribeRoom(S.room);
+  S.room = null; S.roomName = ''; S.inRoom = false;
+  S.partnerId = null; S.partner = ''; S.rating = null;
+  $('#rateModal').classList.add('hidden');
+  clearPartnerCam(); showStage('none');
+  publishPresence();
+  $('#room').classList.add('hidden'); $('#lobby').classList.remove('hidden');
+  renderRooms();
+}
+$('#btnLeave').onclick = leaveRoom;
+window.addEventListener('beforeunload', () => {
+  if(S.mq && S.mq.connected) S.mq.publish(T.pres(S.id), '', { retain: true, qos: 0 });
+});
+
+function send(obj){ if(S.room) pub(T.msg(S.room), { ...obj, from: S.id }); }
+function sendHello(reply){
+  send({ t: 'hello', reply, name: S.me, camId: S.local && S.local.id, screenId: S.screen && S.screen.id,
+    ranking: S.rank, status: { mic: S.mic, cam: S.cam } });
 }
 
-function becomeHost(){
-  destroyPeer();
-  const p = new Peer(S.hostId, { config: ICE, debug: 1 });
-  S.peer = p; S.isHost = true;
-  p.on('open', () => { enterRoom(); setConn('wait'); });
-  p.on('connection', c => {
-    if(connected()){ c.on('open', () => { c.send({ t: 'full' }); setTimeout(() => c.close(), 600); }); return; }
-    setupConn(c);
-  });
-  p.on('call', handleCall);
-  p.on('disconnected', () => { if(!S.leaving){ try{ p.reconnect(); }catch(e){} } });
-  p.on('error', err => {
-    if(err.type === 'unavailable-id'){ setTimeout(tryJoin, 900); }
-    else peerError(err);
-  });
+function checkPartner(){
+  if(!S.inRoom) return;
+  const others = Object.entries(S.presence).filter(([id, p]) => p.room === S.room).sort((a,b) => b[1].seen - a[1].seen);
+  if(S.partnerId && !others.find(([id]) => id === S.partnerId)) partnerLeft();
+  if(!S.partnerId && others.length) setPartner(others[0][0], others[0][1].name);
 }
-
-function peerError(err){
-  console.warn('peer error', err.type, err);
-  if(['network','server-error','socket-error','socket-closed'].includes(err.type)){
-    if(!S.inRoom){ lobbyStatus('Problema de rede. Tentando de novo…'); setTimeout(tryJoin, 2000); }
-    else toast('Oscilação na conexão… 📶');
-  }else if(err.type === 'browser-incompatible'){
-    lobbyStatus('Seu navegador não suporta chamadas. Use Chrome, Edge ou Firefox atualizados.');
-  }
+function setPartner(id, name){
+  if(S.partnerId === id) return;
+  if(S.partnerId) closePC();
+  S.partnerId = id; if(name) S.partner = name;
+  $('#partnerName').textContent = S.partner || 'Seu amor';
+  setConn(true);
+  createPC();
 }
-
-function setupConn(c){
-  S.conn = c;
-  c.on('open', () => {
-    S.remoteId = c.peer;
-    enterRoom(); setConn('on');
-    send({ t: 'hello', name: S.me, ranking: S.rank, status: { mic: S.mic, cam: S.cam } });
-    if(!S.isHost) startCamCall();
-    if(S.screen) callScreen();
-  });
-  c.on('data', onData);
-  c.on('close', onConnClose);
-  c.on('error', e => console.warn('conn error', e));
-}
-
-function onConnClose(){
-  if(S.leaving) return;
-  if(S.conn && S.conn.open) return;
-  setConn('wait');
+function partnerLeft(){
   addChat(null, `${S.partner || 'Seu amor'} saiu da sala 💔`);
-  toast(`${S.partner || 'Seu amor'} desconectou`);
+  toast(`${S.partner || 'Seu amor'} saiu`);
+  closePC();
+  S.partnerId = null; S.partnerCamId = null; S.remoteScreenId = null;
   clearPartnerCam();
   if(S.stageMode === 'remote') showStage('none');
-  if(S.camCall){ try{ S.camCall.close(); }catch(e){} S.camCall = null; }
-  if(S.screenCall){ try{ S.screenCall.close(); }catch(e){} S.screenCall = null; }
-  if(!S.isHost){
-    // o anfitrião saiu: eu viro o anfitrião e espero ele(a) voltar
-    setTimeout(() => { if(!connected() && !S.leaving){ S.attempts = 0; tryJoin(); } }, 1500);
-  }
+  setConn(false); setVideo('aguardando');
 }
 
-/* ---------- CHAMADAS DE MÍDIA ---------- */
-function startCamCall(){
-  if(!S.peer || !S.remoteId || !S.local) return;
-  const call = S.peer.call(S.remoteId, S.local, { metadata: { type: 'cam' } });
-  bindCamCall(call);
-}
-function bindCamCall(call){
-  S.camCall = call;
-  call.on('stream', s => {
-    const v = $('#partnerCam'); v.srcObject = s;
-    v.play().catch(() => showUnmute());
-    updatePartnerCam();
-  });
-  call.on('close', () => { if(S.camCall === call) clearPartnerCam(); });
-}
-function handleCall(call){
-  const type = call.metadata && call.metadata.type;
-  if(type === 'cam'){
-    call.answer(S.local);
-    bindCamCall(call);
-  }else if(type === 'screen'){
-    if(S.screen) stopShare(true); // só uma tela por vez
-    call.answer();
-    S.remoteScreenCall = call;
-    call.on('stream', s => {
-      const v = $('#stageVideo'); v.srcObject = s; v.muted = false; v.volume = +$('#vol').value;
-      showStage('remote');
-      v.play().catch(() => showUnmute());
-    });
-    call.on('close', () => { if(S.remoteScreenCall === call && S.stageMode === 'remote') showStage('none'); });
+/* ---------- WebRTC (perfect negotiation) ---------- */
+function iceConfig(){
+  const servers = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }
+  ];
+  const t = load('cinegj-turn', {});
+  if(t.url){
+    servers.push({ urls: t.url.split(',').map(x => x.trim()).filter(Boolean), username: t.user, credential: t.pass });
+  }else{
+    servers.push({ urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' });
+    servers.push({ urls: 'turn:freestun.net:3478', username: 'free', credential: 'free' });
   }
+  return { iceServers: servers };
 }
-function showUnmute(){
-  if($('#unmute')) return;
-  const b = document.createElement('button'); b.id = 'unmute'; b.textContent = '🔊 Toque para ativar o som';
-  b.onclick = () => { $('#partnerCam').play().catch(()=>{}); $('#stageVideo').play().catch(()=>{}); b.remove(); };
-  document.body.appendChild(b);
-}
-function clearPartnerCam(){ $('#partnerCam').srcObject = null; $('#partnerNoCam').classList.remove('hidden'); }
-function updatePartnerCam(){
-  const hasStream = !!$('#partnerCam').srcObject;
-  $('#partnerNoCam').classList.toggle('hidden', hasStream && S.partnerStatus.cam);
-  $('#partnerFlags').textContent = (S.partnerStatus.mic ? '' : '🔇') + (S.partnerStatus.cam ? '' : '📷̸');
-}
+function sig(obj){ if(S.room && S.partnerId) pub(T.sig(S.room, S.partnerId), { ...obj, from: S.id }); }
 
-/* ---------- COMPARTILHAR TELA ---------- */
-async function startShare(){
-  if(!navigator.mediaDevices.getDisplayMedia){ toast('Seu navegador não permite compartilhar tela aqui'); return; }
+function createPC(){
+  closePC();
+  const pc = new RTCPeerConnection(iceConfig());
+  S.pc = pc; S.polite = S.id < S.partnerId; S.makingOffer = false; S.ignoreOffer = false; S.remoteStreams = {};
+  setVideo('conectando');
+  S.local.getTracks().forEach(t => pc.addTrack(t, S.local));
+  if(S.screen){ S.screenSenders = S.screen.getTracks().map(t => pc.addTrack(t, S.screen)); boostQuality(); }
+  pc.onnegotiationneeded = async () => {
+    try{ S.makingOffer = true; await pc.setLocalDescription(); sig({ description: pc.localDescription.toJSON() }); }
+    catch(e){ console.warn('nego', e); }
+    finally{ S.makingOffer = false; }
+  };
+  pc.onicecandidate = e => { if(e.candidate) sig({ candidate: e.candidate.toJSON() }); };
+  pc.ontrack = ev => {
+    const st = ev.streams[0]; if(!st) return;
+    S.remoteStreams[st.id] = st;
+    st.onremovetrack = () => { if(!st.getTracks().length){ delete S.remoteStreams[st.id]; routeStreams(); } };
+    routeStreams();
+  };
+  let failTimer;
+  pc.onconnectionstatechange = () => {
+    const st = pc.connectionState;
+    if(st === 'connected'){ setVideo('conectado'); clearTimeout(failTimer); }
+    else if(st === 'failed'){
+      setVideo('falhou');
+      toast('O vídeo não conectou. Tentando de novo…');
+      try{ pc.restartIce(); }catch(e){}
+      clearTimeout(failTimer);
+      failTimer = setTimeout(() => { if(S.pc === pc && pc.connectionState !== 'connected') addChat(null, '⚠️ A rede de um de vocês está bloqueando o vídeo. O chat e as reações continuam funcionando. Configure um servidor TURN em "Conexão avançada".'); }, 15000);
+    }
+    else if(st === 'disconnected') setVideo('reconectando');
+  };
+}
+function closePC(){
+  if(S.pc){ try{ S.pc.close(); }catch(e){} S.pc = null; }
+  S.screenSenders = []; S.remoteStreams = {};
+}
+async function onSignal(d){
+  if(d.from !== S.partnerId){
+    const p = S.presence[d.from];
+    setPartner(d.from, p && p.name);
+  }
+  const pc = S.pc; if(!pc) return;
   try{
-    S.screen = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: { ideal: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
-      systemAudio: 'include'
-    });
-  }catch(e){ return; }
-  const vt = S.screen.getVideoTracks()[0];
-  if(vt){ try{ vt.contentHint = 'motion'; }catch(e){} vt.onended = () => stopShare(); }
-  if(!S.screen.getAudioTracks().length) toast('Sem áudio! Compartilhe uma ABA e marque "Compartilhar áudio" 🔈');
-  if(S.stageMode === 'remote' && S.remoteScreenCall){ try{ S.remoteScreenCall.close(); }catch(e){} }
-  const v = $('#stageVideo'); v.srcObject = S.screen; v.muted = true; v.play().catch(()=>{});
-  showStage('local');
-  $('#btnShare').classList.add('active');
-  callScreen();
-  addChat(null, 'Você começou a sessão 🎬');
-  send({ t: 'sys', m: `${S.me} começou a sessão 🎬` });
+    if(d.description){
+      const offerCollision = d.description.type === 'offer' && (S.makingOffer || pc.signalingState !== 'stable');
+      S.ignoreOffer = !S.polite && offerCollision;
+      if(S.ignoreOffer) return;
+      await pc.setRemoteDescription(d.description);
+      if(d.description.type === 'offer'){
+        await pc.setLocalDescription();
+        sig({ description: pc.localDescription.toJSON() });
+      }
+    }else if(d.candidate){
+      try{ await pc.addIceCandidate(d.candidate); }catch(e){ if(!S.ignoreOffer) console.warn('ice', e); }
+    }
+  }catch(e){ console.warn('signal', e); }
 }
-function callScreen(){
-  if(!S.peer || !S.remoteId || !S.screen || !connected()) return;
-  if(S.screenCall){ try{ S.screenCall.close(); }catch(e){} }
-  const call = S.peer.call(S.remoteId, S.screen, { metadata: { type: 'screen' } });
-  S.screenCall = call;
-  boostQuality(call);
+function routeStreams(){
+  const cam = S.partnerCamId && S.remoteStreams[S.partnerCamId];
+  const pv = $('#partnerCam');
+  if(cam && pv.srcObject !== cam){ pv.srcObject = cam; pv.play().catch(() => showUnmute()); }
+  updatePartnerCam();
+  const scr = S.remoteScreenId && S.remoteStreams[S.remoteScreenId];
+  const sv = $('#stageVideo');
+  if(scr){
+    if(S.stageMode !== 'remote' || sv.srcObject !== scr){
+      sv.srcObject = scr; sv.muted = false; sv.volume = +$('#vol').value;
+      showStage('remote'); sv.play().catch(() => showUnmute());
+    }
+  }else if(S.stageMode === 'remote') showStage('none');
 }
-function boostQuality(call){
+function boostQuality(){
   const apply = () => {
-    const pc = call.peerConnection; if(!pc) return;
-    pc.getSenders().forEach(snd => {
+    S.screenSenders.forEach(snd => {
       if(snd.track && snd.track.kind === 'video'){
         const p = snd.getParameters();
         if(!p.encodings || !p.encodings.length) p.encodings = [{}];
@@ -591,11 +761,46 @@ function boostQuality(call){
       }
     });
   };
-  setTimeout(apply, 1500); setTimeout(apply, 5000);
+  setTimeout(apply, 2000); setTimeout(apply, 6000);
+}
+function showUnmute(){
+  if($('#unmute')) return;
+  const b = document.createElement('button'); b.id = 'unmute'; b.textContent = '🔊 Toque para ativar o som';
+  b.onclick = () => { $('#partnerCam').play().catch(()=>{}); $('#stageVideo').play().catch(()=>{}); b.remove(); };
+  document.body.appendChild(b);
+}
+function clearPartnerCam(){ $('#partnerCam').srcObject = null; $('#partnerNoCam').classList.remove('hidden'); $('#partnerFlags').textContent = ''; }
+function updatePartnerCam(){
+  const has = !!$('#partnerCam').srcObject;
+  $('#partnerNoCam').classList.toggle('hidden', has && S.partnerStatus.cam);
+  $('#partnerFlags').textContent = S.partnerId ? (S.partnerStatus.mic ? '' : '🔇') + (S.partnerStatus.cam ? '' : '🚫📷') : '';
+}
+
+/* ---------- COMPARTILHAR TELA ---------- */
+async function startShare(){
+  if(!navigator.mediaDevices.getDisplayMedia){ toast('Seu navegador não permite compartilhar tela aqui (use o computador)'); return; }
+  try{
+    S.screen = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      systemAudio: 'include'
+    });
+  }catch(e){ S.screen = null; return; }
+  const vt = S.screen.getVideoTracks()[0];
+  if(vt){ try{ vt.contentHint = 'motion'; }catch(e){} vt.onended = () => stopShare(); }
+  if(!S.screen.getAudioTracks().length) toast('Sem áudio! Compartilhe uma ABA e marque "Compartilhar áudio" 🔈');
+  const v = $('#stageVideo'); v.srcObject = S.screen; v.muted = true; v.play().catch(()=>{});
+  showStage('local');
+  $('#btnShare').classList.add('active');
+  if(S.pc){ S.screenSenders = S.screen.getTracks().map(t => S.pc.addTrack(t, S.screen)); boostQuality(); }
+  send({ t: 'screen-start', sid: S.screen.id, name: S.me });
+  addChat(null, 'Você começou a sessão 🎬');
 }
 function stopShare(silent){
-  if(S.screen){ S.screen.getTracks().forEach(t => t.stop()); S.screen = null; }
-  if(S.screenCall){ try{ S.screenCall.close(); }catch(e){} S.screenCall = null; }
+  if(!S.screen) return;
+  S.screen.getTracks().forEach(t => t.stop());
+  if(S.pc) S.screenSenders.forEach(s => { try{ S.pc.removeTrack(s); }catch(e){} });
+  S.screenSenders = []; S.screen = null;
   $('#btnShare').classList.remove('active');
   if(S.stageMode === 'local') showStage('none');
   if(!silent) send({ t: 'screen-stop' });
@@ -603,7 +808,7 @@ function stopShare(silent){
 function showStage(mode){
   S.stageMode = mode;
   const v = $('#stageVideo');
-  if(mode === 'none'){ v.srcObject = null; }
+  if(mode === 'none') v.srcObject = null;
   v.classList.toggle('hidden', mode === 'none');
   $('#stageEmpty').classList.toggle('hidden', mode !== 'none');
   $('#volBox').classList.toggle('hidden', mode !== 'remote');
@@ -613,22 +818,13 @@ function showStage(mode){
 }
 $('#vol').oninput = e => { $('#stageVideo').volume = +e.target.value; };
 
-/* ---------- SALA / UI ---------- */
-function enterRoom(){
-  if(S.inRoom) return;
-  S.inRoom = true;
-  $('#lobby').classList.add('hidden'); $('#room').classList.remove('hidden');
-  $('#roomCode').textContent = S.room;
-  $('#myName').textContent = S.me + ' (você)';
-  $('#myCam').srcObject = S.local;
-  $('#myNoCam').classList.toggle('hidden', !S.noCam);
-  refreshToggles();
-  addChat(null, 'Bem-vindo(a) ao Cine G+J 💕');
+/* ---------- UI DA SALA ---------- */
+function setConn(on){
+  $('#connDot').className = 'dot ' + (on ? 'on' : 'wait');
+  $('#connText').textContent = on ? `Juntinhos com ${S.partner || 'seu amor'} 💞` : 'Esperando seu amor…';
 }
-function setConn(state){
-  const d = $('#connDot'); d.className = 'dot ' + (state === 'on' ? 'on' : 'wait');
-  $('#connText').textContent = state === 'on' ? `Juntinhos com ${S.partner || 'seu amor'} 💞` : 'Esperando seu amor…';
-}
+function setChatState(on){ if(!on) $('#connText').textContent = 'Sem internet… reconectando'; else setConn(!!S.partnerId); }
+function setVideo(state){ $('#videoText').textContent = 'vídeo: ' + state; $('#videoDot').className = 'dot ' + (state === 'conectado' ? 'on' : state === 'falhou' ? '' : 'wait'); }
 function refreshToggles(){
   $('#btnMic').classList.toggle('off', !S.mic); $('#btnMic').textContent = S.mic ? '🎙️' : '🔇';
   $('#btnCam').classList.toggle('off', !S.cam);
@@ -646,18 +842,9 @@ $('#btnCam').onclick = () => {
 };
 $('#btnShare').onclick = () => { S.screen ? stopShare() : startShare(); };
 $('#btnFull').onclick = () => {
-  const r = $('#room');
   if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
-  else r.requestFullscreen().catch(() => toast('Tela cheia não disponível'));
+  else $('#room').requestFullscreen().catch(() => toast('Tela cheia não disponível'));
 };
-$('#btnLeave').onclick = () => {
-  S.leaving = true;
-  send({ t: 'bye' });
-  stopShare(true);
-  if(S.local) S.local.getTracks().forEach(t => t.stop());
-  setTimeout(() => { destroyPeer(); location.reload(); }, 300);
-};
-window.addEventListener('beforeunload', () => { send({ t: 'bye' }); });
 
 /* ---------- REAÇÕES & CHAT ---------- */
 REACTIONS.forEach(e => {
@@ -670,8 +857,10 @@ function spawnReaction(e, who){
   el.style.left = (8 + Math.random()*80) + '%';
   el.style.setProperty('--dx', (Math.random()*120 - 60) + 'px');
   if(e === '💋' || e === '❤️') el.style.fontSize = '60px';
-  el.innerHTML = `<span>${e}</span><small></small>`;
+  el.innerHTML = `<span></span><small></small>`;
+  el.querySelector('span').textContent = e;
   el.querySelector('small').textContent = who;
+  if(!who) el.querySelector('small').remove();
   $('#reactLayer').appendChild(el);
   setTimeout(() => el.remove(), 3300);
 }
@@ -690,36 +879,44 @@ $('#chatForm').onsubmit = e => {
 
 /* ---------- MENSAGENS DO PARCEIRO ---------- */
 function onData(d){
-  if(!d || !d.t) return;
-  switch(d.t){
-    case 'hello':
-      S.partner = d.name || 'Seu amor';
-      $('#partnerName').textContent = S.partner;
-      if(d.status){ S.partnerStatus = d.status; updatePartnerCam(); }
-      setConn('on');
-      mergeRanking(d.ranking);
+  if(!d.t) return;
+  if(d.t === 'hello'){
+    const isNew = d.from !== S.partnerId;
+    if(isNew) setPartner(d.from, d.name);
+    S.partner = d.name || 'Seu amor';
+    $('#partnerName').textContent = S.partner; setConn(true);
+    S.partnerCamId = d.camId || null;
+    S.remoteScreenId = d.screenId || null;
+    if(d.status){ S.partnerStatus = d.status; }
+    routeStreams();
+    mergeRanking(d.ranking);
+    if(!d.reply){
       addChat(null, `${S.partner} chegou 💕`); toast(`${S.partner} entrou no cinema 💕`);
+      sendHello(true);
+      if(S.screen) send({ t: 'screen-start', sid: S.screen.id, name: S.me });
       if(S.rating) send({ t: 'rate-open', rating: S.rating });
-      renderRate();
-      break;
-    case 'full': lobbyStatus('Essa sala já tem duas pessoas 💑'); toast('Sala cheia'); break;
-    case 'bye': break;
+    }
+    renderRate();
+    return;
+  }
+  if(d.from !== S.partnerId) return;
+  switch(d.t){
+    case 'bye': partnerLeft(); break;
     case 'react': spawnReaction(d.e, S.partner); break;
     case 'chat': addChat(S.partner, d.m); break;
-    case 'sys': addChat(null, d.m); break;
     case 'status': S.partnerStatus = { mic: d.mic, cam: d.cam }; updatePartnerCam(); break;
+    case 'screen-start':
+      if(S.screen) stopShare(true);  // só uma tela por vez
+      S.remoteScreenId = d.sid; routeStreams();
+      addChat(null, `${S.partner} começou a sessão 🎬`);
+      break;
     case 'screen-stop':
-      if(S.stageMode === 'remote') showStage('none');
-      if(S.remoteScreenCall){ try{ S.remoteScreenCall.close(); }catch(e){} S.remoteScreenCall = null; }
+      S.remoteScreenId = null; routeStreams();
       addChat(null, 'A transmissão terminou 🎞️');
       break;
     case 'rate-open': S.rating = d.rating; openRate(); break;
-    case 'rate-update':
-      if(S.rating){ S.rating[d.f] = d.v; fillRateFields(d.f); renderRate(); }
-      break;
-    case 'rate-star':
-      if(S.rating){ S.rating.stars[d.who] = d.n; renderRate(); }
-      break;
+    case 'rate-update': if(S.rating){ S.rating[d.f] = d.v; fillRateFields(d.f); renderRate(); } break;
+    case 'rate-star': if(S.rating){ S.rating.stars[d.who] = d.n; renderRate(); } break;
     case 'rate-save': addEntry(d.entry); closeRate(); burst(); toast(`"${d.entry.title}" entrou pro nosso ranking 💖`); break;
     case 'rate-cancel': closeRate(); break;
     case 'rank-del': deleteEntry(d.id, false); break;
@@ -731,7 +928,7 @@ function onData(d){
 function today(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
 (function buildStars(){
   for(let i=1;i<=5;i++){
-    const b = document.createElement('button'); b.textContent = '★'; b.dataset.n = i;
+    const b = document.createElement('button'); b.textContent = '★';
     b.onclick = () => { if(!S.rating) return; S.rating.stars[S.me] = i; send({ t: 'rate-star', who: S.me, n: i }); renderRate(); };
     b.onmouseenter = () => hoverStars(i); b.onmouseleave = () => hoverStars(0);
     $('#myStars').appendChild(b);
@@ -745,7 +942,7 @@ function hoverStars(n){
 }
 $('#btnRate').onclick = () => {
   if(!S.rating){
-    S.rating = { id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), title: '', type: 'Filme', date: today(), note: '', stars: {} };
+    S.rating = { id: Date.now().toString(36) + rid(4), title: '', type: 'Filme', date: today(), note: '', stars: {} };
     send({ t: 'rate-open', rating: S.rating });
   }
   openRate();
@@ -756,31 +953,24 @@ function closeRate(){ S.rating = null; $('#rateModal').classList.add('hidden'); 
 function fillRateFields(only){
   const r = S.rating; if(!r) return;
   const map = { title: '#rTitle', type: '#rType', date: '#rDate', note: '#rNote' };
-  Object.entries(map).forEach(([f, sel]) => {
-    if(only && only !== f) return;
-    const el = $(sel); if(el.value !== r[f]) el.value = r[f];
-  });
+  Object.entries(map).forEach(([f, sel]) => { if(only && only !== f) return; const el = $(sel); if(el.value !== r[f]) el.value = r[f]; });
 }
 [['title','#rTitle'],['type','#rType'],['date','#rDate'],['note','#rNote']].forEach(([f, sel]) => {
   $(sel).addEventListener('input', e => { if(!S.rating) return; S.rating[f] = e.target.value; send({ t: 'rate-update', f, v: e.target.value }); renderRate(); });
 });
-function partnerKey(){
-  if(!S.rating) return null;
-  return Object.keys(S.rating.stars).find(k => k !== S.me) || S.partner || null;
-}
 function renderRate(){
   const r = S.rating; if(!r) return;
   const mine = r.stars[S.me] || 0;
-  const pk = partnerKey(); const theirs = pk ? (r.stars[pk] || 0) : 0;
+  const pk = Object.keys(r.stars).find(k => k !== S.me);
+  const theirs = pk ? r.stars[pk] : 0;
   hoverStars(0);
   [...$('#partnerStars').children].forEach((b,i) => b.classList.toggle('on', i < theirs));
   const pname = S.partner || 'seu amor';
   $('#rPartnerLabel').firstChild.textContent = `Nota de ${pname}`;
-  $('#rPartnerWait').textContent = theirs ? 'já avaliou ✓' : (connected() ? 'escolhendo as estrelas…' : 'não está na sala');
-  $('#rMeLabel').firstChild.textContent = `Sua nota`;
+  $('#rPartnerWait').textContent = theirs ? 'já avaliou ✓' : (S.partnerId ? 'escolhendo as estrelas…' : 'não está na sala');
   const vals = Object.values(r.stars).filter(Boolean);
   $('#rAvg').textContent = vals.length ? `Média: ${(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1)} ★` + (vals.length === 2 && vals[0] === vals[1] ? '  — sintonia total 💞' : '') : '';
-  const ready = r.title.trim() && mine && (theirs || !connected());
+  const ready = r.title.trim() && mine && (theirs || !S.partnerId);
   $('#rSave').disabled = !ready;
   $('#rSave').textContent = ready ? 'Salvar no ranking 💖' : (!r.title.trim() ? 'Falta o nome' : !mine ? 'Falta sua nota' : `Esperando ${pname}…`);
 }
@@ -796,10 +986,7 @@ $('#rSave').onclick = () => {
 
 /* ---------- RANKING ---------- */
 function saveRank(){ store('cinegj-ranking', S.rank); }
-function addEntry(e){
-  S.rank.items = S.rank.items.filter(x => x.id !== e.id); S.rank.items.push(e);
-  saveRank(); renderRanking();
-}
+function addEntry(e){ S.rank.items = S.rank.items.filter(x => x.id !== e.id); S.rank.items.push(e); saveRank(); renderRanking(); }
 function deleteEntry(id, broadcast){
   S.rank.items = S.rank.items.filter(x => x.id !== id);
   if(!S.rank.deleted.includes(id)) S.rank.deleted.push(id);
@@ -820,7 +1007,6 @@ function mergeRanking(r){
 }
 function fmtDate(s){ if(!s) return ''; const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; }
 function starStr(n){ return '★'.repeat(n) + '☆'.repeat(5-n); }
-function esc(s){ const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 function renderRanking(){
   const all = S.rank.items;
   $('#stTotal').textContent = all.length;
@@ -828,7 +1014,6 @@ function renderRanking(){
   const pairs = all.filter(e => Object.values(e.stars).length >= 2);
   const same = pairs.filter(e => { const v = Object.values(e.stars); return v.every(x => x === v[0]); }).length;
   $('#stMatch').textContent = pairs.length ? Math.round(same/pairs.length*100) + '%' : '–';
-
   const list = all.filter(e => S.filter === 'all' || e.type === S.filter)
     .sort((a,b) => b.avg - a.avg || (b.date||'').localeCompare(a.date||''));
   const box = $('#rankList'); box.innerHTML = '';
@@ -868,7 +1053,7 @@ $('#bExport').onclick = () => {
 };
 $('#bImport').onchange = async e => {
   const f = e.target.files[0]; if(!f) return;
-  try{ const data = JSON.parse(await f.text()); mergeRanking(data); send({ t: 'rank-sync', ranking: S.rank }); toast('Backup importado 💾'); }
+  try{ mergeRanking(JSON.parse(await f.text())); send({ t: 'rank-sync', ranking: S.rank }); toast('Backup importado 💾'); }
   catch(err){ toast('Arquivo inválido'); }
   e.target.value = '';
 };
