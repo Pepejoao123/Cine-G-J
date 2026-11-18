@@ -241,13 +241,17 @@ header .sp{flex:1}
         <input id="inSecret" type="password" maxlength="60" placeholder="A mesma pra vocês dois 🤫">
       </div>
       <button class="btn-main" id="btnLogin">Abrir nosso cinema 💕</button>
-      <details class="adv">
+      <details class="adv" id="advBox">
         <summary>⚙️ Conexão avançada (servidor TURN)</summary>
-        <p>Use se o vídeo não conectar em alguma rede. Crie uma conta grátis em metered.ca e cole aqui os dados de TURN (os dois precisam preencher igual).</p>
-        <input id="turnUrl" placeholder="turn:xxx.relay.metered.ca:80,turns:xxx.relay.metered.ca:443">
+        <p><b>Necessário quando alguém está no 4G.</b> Crie conta grátis em <a href="https://dashboard.metered.ca/signup" target="_blank" rel="noopener">dashboard.metered.ca</a> → TURN Server → crie uma credencial → "Show API Key". Só você precisa preencher: o convite leva a configuração pro seu amor.</p>
+        <input id="turnApp" placeholder="nome do app (ex.: cinegj — de cinegj.metered.live)">
+        <input id="turnKey" type="password" placeholder="API key da credencial">
+        <p style="margin-top:10px">Ou, se tiver outro servidor TURN:</p>
+        <input id="turnUrl" placeholder="turn:servidor:3478,turns:servidor:443">
         <input id="turnUser" placeholder="usuário">
         <input id="turnPass" type="password" placeholder="senha">
-        <button class="btn-ghost" id="btnTurnSave" type="button">Salvar</button>
+        <button class="btn-ghost" id="btnTurnSave" type="button">Salvar e testar</button>
+        <p id="turnResult" style="font-weight:700;color:var(--cream)"></p>
       </details>
     </div>
 
@@ -273,6 +277,7 @@ header .sp{flex:1}
       <button class="link" id="btnLogout" type="button">trocar nome ou palavra secreta</button>
     </div>
 
+    <div id="advHolder"></div>
     <div id="lobbyStatus"></div>
     <p class="hint">Só aparecem as salas de quem usa a <b>mesma palavra secreta</b>, e tudo vai criptografado.<br>Usem fone de ouvido pra não dar eco 🎧</p>
   </div>
@@ -330,6 +335,7 @@ header .sp{flex:1}
     <div class="vol hidden" id="volBox" title="Volume do filme">🔊<input type="range" id="vol" min="0" max="1" step="0.05" value="1"></div>
     <button class="btn-rate" id="btnRate">⭐ Avaliar</button>
     <button class="cbtn" id="btnFull" data-tip="Tela cheia">⛶</button>
+    <button class="cbtn" id="btnRetry" data-tip="Reconectar vídeo">🔄</button>
     <button class="cbtn btn-leave" id="btnLeave" data-tip="Sair da sala">🚪</button>
   </div>
 </section>
@@ -397,6 +403,12 @@ header .sp{flex:1}
 
 <script>
 const $ = s => document.querySelector(s);
+
+/* ====== SERVIDOR TURN (para o vídeo passar em 4G e redes que bloqueiam) ======
+   Crie grátis em https://dashboard.metered.ca (20 GB/mês), vá em TURN Server → crie uma credencial
+   → "Show API Key". Preencha aqui uma vez e todo mundo que abrir o site já usa. */
+const TURN_FIXO = { app: 'cinegj', key: '16ac89ea116a948157af367c40f8b3285226', region: 'global' };   // conta Metered do João (região global: a única liberada no plano grátis)
+
 const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081'];
 const REACTIONS = ['❤️','😂','😱','😭','😍','🔥','🍿','😴','🤯','💋'];
 const FRESH_MS = 60000;
@@ -406,7 +418,7 @@ function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e)
 function rid(n){ const c='abcdefghjkmnpqrstuvwxyz23456789'; let s=''; for(let i=0;i<n;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
 
 const S = {
-  id: rid(10), me: '', ns: '', key: null, clients: [], pendingCandidates: [],
+  id: rid(10), me: '', ns: '', key: null, clients: [], pendingCandidates: [], gen: 0, resets: 0, relayOnly: false, ice: null, hasTurn: false, inviteTurn: null, viaRelay: false,
   presence: {},              // clientId -> {name, room, roomName, ts, seen}
   room: null, roomName: '', inRoom: false,
   partnerId: null, partner: '', partnerCamId: null, remoteScreenId: null,
@@ -550,9 +562,11 @@ $('#inName').value = load('cinegj-name', '');
 $('#inSecret').value = load('cinegj-secret', '');
 const turn = load('cinegj-turn', {});
 $('#turnUrl').value = turn.url || ''; $('#turnUser').value = turn.user || ''; $('#turnPass').value = turn.pass || '';
+$('#turnApp').value = turn.app || ''; $('#turnKey').value = turn.key || '';
 $('#btnTurnSave').onclick = () => {
-  store('cinegj-turn', { url: $('#turnUrl').value.trim(), user: $('#turnUser').value.trim(), pass: $('#turnPass').value });
-  toast('Servidor TURN salvo ✔');
+  store('cinegj-turn', { app: cleanApp($('#turnApp').value), key: $('#turnKey').value.trim(),
+    url: $('#turnUrl').value.trim(), user: $('#turnUser').value.trim(), pass: $('#turnPass').value });
+  testTurn();
 };
 $('#btnLogin').onclick = () => login();
 $('#inSecret').addEventListener('keydown', e => { if(e.key === 'Enter') login(); });
@@ -566,6 +580,7 @@ async function login(opts = {}){
   S.me = name; store('cinegj-name', name); store('cinegj-secret', secret);
   $('#btnLogin').disabled = true;
   await setupCrypto(secret);
+  loadIce();
   $('#stepLogin').classList.add('hidden'); $('#stepInvite').classList.add('hidden');
   if(!opts.silent) $('#stepRooms').classList.remove('hidden');
   renderRooms();
@@ -593,10 +608,14 @@ function parseInvite(){
 }
 function inviteLink(){
   const base = location.origin + location.pathname;
-  return base + '#convite-' + b64url(JSON.stringify({ r: S.room, n: S.roomName, k: load('cinegj-secret', ''), f: S.me }));
+  const t = turnCfg(); const tc = (t.app && t.key) ? { app: t.app, key: t.key, region: t.region } : t.url ? { url: t.url, user: t.user, pass: t.pass } : null;
+  return base + '#convite-' + b64url(JSON.stringify({ r: S.room, n: S.roomName, k: load('cinegj-secret', ''), f: S.me, t: tc }));
 }
+$('#advHolder').appendChild($('#advBox'));
 const INVITE = parseInvite();
 if(INVITE){
+  S.inviteTurn = INVITE.t || null;
+  $('#advBox').classList.add('hidden');
   $('#stepLogin').classList.add('hidden'); $('#stepInvite').classList.remove('hidden');
   $('#inviteText').innerHTML = `💌 <b>${esc(INVITE.f || 'Seu amor')}</b> te convidou para<br><span class="inv-room">${esc(INVITE.n || 'uma sessão')}</span>`;
   $('#inInviteName').value = load('cinegj-name', '');
@@ -609,6 +628,7 @@ if(INVITE){
     const ok = await login({ name, secret: INVITE.k, silent: true });
     if(!ok){ $('#btnInvite').disabled = false; return; }
     lobbyStatus('Entrando na sessão…');
+    await loadIce();
     const enter = () => { history.replaceState(null, '', location.pathname); joinRoom(INVITE.r, INVITE.n || 'Nossa sessão'); };
     if(anyConnected()) enter(); else onFirstConnect = enter;
   };
@@ -693,6 +713,7 @@ async function joinRoom(id, name){
     S.local = await getLocalMedia();
     lobbyStatus('');
   }
+  if(!S.ice) await loadIce();
   S.room = id; S.roomName = name; S.inRoom = true;
   subscribeRoom(id);
   publishPresence();
@@ -741,6 +762,7 @@ function setPartner(id, name){
   if(S.partnerId === id) return;
   if(S.partnerId) closePC();
   S.partnerId = id; if(name) S.partner = name;
+  S.gen = 0; S.resets = 0; S.relayOnly = false; S.warned = false;
   $('#partnerName').textContent = S.partner || 'Seu amor';
   setConn(true);
   createPC();
@@ -756,20 +778,50 @@ function partnerLeft(){
 }
 
 /* ---------- WebRTC (perfect negotiation) ---------- */
-function iceConfig(){
-  const servers = [
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }
-  ];
-  const t = load('cinegj-turn', {});
+function turnCfg(){
+  const saved = load('cinegj-turn', {});
+  if((saved.app && saved.key) || saved.url) return saved;
+  if(S.inviteTurn && ((S.inviteTurn.app && S.inviteTurn.key) || S.inviteTurn.url)) return S.inviteTurn;
+  return TURN_FIXO;
+}
+function cleanApp(a){ return (a || '').trim().replace(/^https?:\/\//, '').replace(/\.metered\.live.*$/, '').replace(/\/.*$/, ''); }
+async function loadIce(){
+  const servers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+  const t = turnCfg(); S.hasTurn = false;
+  if(t.app && t.key){
+    try{
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch(`https://${cleanApp(t.app)}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(t.key.trim())}&region=${encodeURIComponent(t.region || 'global')}`, { signal: ctl.signal });
+      clearTimeout(to);
+      if(r.ok){ const arr = await r.json(); if(Array.isArray(arr) && arr.length){ S.ice = { iceServers: arr }; S.hasTurn = arr.some(s => JSON.stringify(s.urls).includes('turn')); return S.ice; } }
+    }catch(e){ console.warn('turn fetch', e); }
+    toast('Não consegui pegar o servidor TURN — confira nome do app e API key');
+  }
   if(t.url){
     servers.push({ urls: t.url.split(',').map(x => x.trim()).filter(Boolean), username: t.user, credential: t.pass });
-  }else{
-    servers.push({ urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' });
-    servers.push({ urls: 'turn:freestun.net:3478', username: 'free', credential: 'free' });
+    S.hasTurn = true;
   }
-  return { iceServers: servers };
+  S.ice = { iceServers: servers };
+  return S.ice;
 }
-function sig(obj){ if(S.room && S.partnerId) pub(T.sig(S.room, S.partnerId), { ...obj, from: S.id }); }
+function iceConfig(){
+  const cfg = { ...(S.ice || { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }) };
+  if(S.relayOnly && S.hasTurn) cfg.iceTransportPolicy = 'relay';
+  return cfg;
+}
+async function testTurn(){
+  const out = $('#turnResult'); out.textContent = 'Testando…';
+  await loadIce();
+  if(!S.hasTurn){ out.textContent = '✖ Nenhum TURN configurado'; return; }
+  const pc = new RTCPeerConnection({ ...S.ice, iceTransportPolicy: 'relay' });
+  pc.createDataChannel('t'); let ok = false;
+  pc.onicecandidate = e => { if(e.candidate && / typ relay /.test(e.candidate.candidate)) ok = true; };
+  await pc.setLocalDescription(await pc.createOffer());
+  for(let i=0;i<16 && !ok;i++) await new Promise(r => setTimeout(r, 500));
+  pc.close();
+  out.textContent = ok ? '✔ TURN funcionando! O vídeo vai passar mesmo no 4G 💕' : '✖ O TURN não respondeu. Confira os dados.';
+}
+function sig(obj){ if(S.room && S.partnerId) pub(T.sig(S.room, S.partnerId), { ...obj, g: S.gen, relay: S.relayOnly, from: S.id }); }
 
 function createPC(){
   closePC();
@@ -792,19 +844,48 @@ function createPC(){
     st.onremovetrack = () => { if(!st.getTracks().length){ delete S.remoteStreams[st.id]; routeStreams(); } };
     routeStreams();
   };
-  let failTimer;
+  const watchdog = setTimeout(() => { if(S.pc === pc && pc.connectionState !== 'connected') videoFailed(pc); }, 25000);
   pc.onconnectionstatechange = () => {
     const st = pc.connectionState;
-    if(st === 'connected'){ setVideo('conectado'); clearTimeout(failTimer); }
-    else if(st === 'failed'){
-      setVideo('falhou');
-      toast('O vídeo não conectou. Tentando de novo…');
-      try{ pc.restartIce(); }catch(e){}
-      clearTimeout(failTimer);
-      failTimer = setTimeout(() => { if(S.pc === pc && pc.connectionState !== 'connected') addChat(null, '⚠️ A rede de um de vocês está bloqueando o vídeo. O chat e as reações continuam funcionando. Configure um servidor TURN em "Conexão avançada".'); }, 15000);
-    }
+    if(S.pc !== pc) return;
+    if(st === 'connected'){ clearTimeout(watchdog); S.resets = 0; reportRoute(pc); }
+    else if(st === 'failed'){ clearTimeout(watchdog); videoFailed(pc); }
     else if(st === 'disconnected') setVideo('reconectando');
   };
+}
+/* Se o vídeo falhar: recria a conexão nos dois lados, forçando passar pelo TURN */
+function videoFailed(pc){
+  if(S.pc !== pc) return;
+  S.resets = (S.resets || 0) + 1;
+  if(S.resets <= 3){
+    setVideo('reconectando');
+    S.relayOnly = S.hasTurn && S.resets >= 1;
+    resetRTC(S.gen + 1, S.relayOnly, true);
+    return;
+  }
+  setVideo('falhou');
+  if(!S.warned){
+    S.warned = true;
+    addChat(null, S.hasTurn
+      ? '⚠️ O vídeo não conseguiu conectar nem pelo TURN. Tentem trocar de rede (Wi-Fi ↔ 4G) e clique em 🔄.'
+      : '⚠️ A internet de um de vocês (geralmente o 4G) bloqueia vídeo direto. Configure o servidor TURN grátis: veja "⚙️ Conexão avançada" na tela inicial. O chat e as reações continuam funcionando.');
+  }
+}
+function resetRTC(gen, relay, announce){
+  S.gen = gen; S.relayOnly = relay;
+  if(announce) send({ t: 'rtc-reset', g: gen, relay });
+  createPC();
+}
+async function reportRoute(pc){
+  try{
+    const stats = await pc.getStats(); let pair, local;
+    stats.forEach(r => { if(r.type === 'transport' && r.selectedCandidatePairId) pair = stats.get(r.selectedCandidatePairId); });
+    if(!pair) stats.forEach(r => { if(r.type === 'candidate-pair' && r.nominated && r.state === 'succeeded') pair = r; });
+    if(pair) local = stats.get(pair.localCandidateId);
+    const relay = local && local.candidateType === 'relay';
+    setVideo(relay ? 'conectado (via TURN)' : 'conectado');
+    S.viaRelay = relay; boostQuality();
+  }catch(e){ setVideo('conectado'); }
 }
 function addLocalTracks(pc){
   S.local.getTracks().forEach(t => pc.addTrack(t, S.local));
@@ -818,6 +899,10 @@ async function onSignal(d){
   if(d.from !== S.partnerId){
     const p = S.presence[d.from];
     setPartner(d.from, p && p.name);
+  }
+  if(typeof d.g === 'number'){
+    if(d.g < S.gen) return;                       // sinal de uma conexão antiga
+    if(d.g > S.gen) resetRTC(d.g, !!d.relay || S.relayOnly, false);
   }
   const pc = S.pc; if(!pc) return;
   try{
@@ -859,7 +944,7 @@ function boostQuality(){
       if(snd.track && snd.track.kind === 'video'){
         const p = snd.getParameters();
         if(!p.encodings || !p.encodings.length) p.encodings = [{}];
-        p.encodings[0].maxBitrate = 4500000;
+        p.encodings[0].maxBitrate = S.viaRelay ? 1500000 : 4500000;
         p.encodings[0].maxFramerate = 30;
         p.degradationPreference = 'maintain-framerate';
         snd.setParameters(p).catch(()=>{});
@@ -929,7 +1014,7 @@ function setConn(on){
   $('#connText').textContent = on ? `Juntinhos com ${S.partner || 'seu amor'} 💞` : 'Esperando seu amor…';
 }
 function setChatState(on){ if(!on) $('#connText').textContent = 'Sem internet… reconectando'; else setConn(!!S.partnerId); }
-function setVideo(state){ $('#videoText').textContent = 'vídeo: ' + state; $('#videoDot').className = 'dot ' + (state === 'conectado' ? 'on' : state === 'falhou' ? '' : 'wait'); }
+function setVideo(state){ $('#videoText').textContent = 'vídeo: ' + state; $('#videoDot').className = 'dot ' + (state.startsWith('conectado') ? 'on' : state === 'falhou' ? '' : 'wait'); }
 function refreshToggles(){
   $('#btnMic').classList.toggle('off', !S.mic); $('#btnMic').textContent = S.mic ? '🎙️' : '🔇';
   $('#btnCam').classList.toggle('off', !S.cam);
@@ -946,6 +1031,11 @@ $('#btnCam').onclick = () => {
   refreshToggles(); send({ t: 'status', mic: S.mic, cam: S.cam });
 };
 $('#btnShare').onclick = () => { S.screen ? stopShare() : startShare(); };
+$('#btnRetry').onclick = async () => {
+  if(!S.partnerId){ toast('Seu amor ainda não está na sala'); return; }
+  await loadIce(); S.resets = 0; S.warned = false;
+  resetRTC(S.gen + 1, false, true); toast('Reconectando o vídeo… 🔄');
+};
 $('#btnFull').onclick = () => {
   if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
   else $('#room').requestFullscreen().catch(() => toast('Tela cheia não disponível'));
@@ -1026,6 +1116,7 @@ function onData(d){
     case 'rate-cancel': closeRate(); break;
     case 'rank-del': deleteEntry(d.id, false); break;
     case 'rank-sync': mergeRanking(d.ranking); break;
+    case 'rtc-reset': if(d.g > S.gen) resetRTC(d.g, !!d.relay, false); break;
   }
 }
 
