@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cine G+J 💕</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{
+  --bg1:#14060d; --bg2:#2a0b1b; --wine:#4a1029; --rose:#ff4d79; --rose2:#ff8fab;
+  --gold:#f5c16c; --cream:#fff3ea; --muted:#c9a3b3; --card:rgba(40,10,26,.78);
+  --line:rgba(255,143,171,.18);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'DM Sans',system-ui,sans-serif;color:var(--cream);
+  background:radial-gradient(ellipse at top,#3b0d24 0%,var(--bg2) 35%,var(--bg1) 100%);overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;color:inherit}
+input,select,textarea{font-family:inherit;color:var(--cream)}
+.hidden{display:none!important}
+
+/* corações flutuando no fundo */
+#hearts{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+#hearts span{position:absolute;bottom:-40px;color:var(--rose);opacity:.12;animation:floatUp linear infinite}
+@keyframes floatUp{to{transform:translateY(-115vh) rotate(25deg)}}
+
+.logo{font-family:'Great Vibes',cursive;line-height:1;color:var(--cream);text-shadow:0 0 24px rgba(255,77,121,.55)}
+.logo b{font-family:'Playfair Display',serif;font-weight:700;font-style:italic;color:var(--rose);font-size:.62em;letter-spacing:.02em;margin-left:.12em}
+
+/* ---------- LOBBY ---------- */
+#lobby{position:relative;z-index:1;height:100%;display:flex;align-items:center;justify-content:center;padding:20px}
+.lobby-card{width:min(440px,100%);background:var(--card);border:1px solid var(--line);border-radius:28px;padding:38px 32px;
+  backdrop-filter:blur(14px);box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 1px rgba(245,193,108,.06) inset;text-align:center}
+.lobby-card .logo{font-size:74px}
+.tagline{font-family:'Playfair Display',serif;font-style:italic;color:var(--muted);margin:6px 0 28px}
+.strip{display:flex;gap:6px;justify-content:center;margin-bottom:22px}
+.strip i{width:14px;height:10px;border-radius:2px;background:rgba(245,193,108,.35)}
+.field{text-align:left;margin-bottom:16px}
+.field label{display:block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:7px}
+.field input{width:100%;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:14px;padding:13px 15px;font-size:16px;outline:none}
+.field input:focus{border-color:var(--rose)}
+.code-row{display:flex;gap:8px}
+.code-row input{flex:1;text-transform:lowercase;letter-spacing:.08em}
+.btn-ghost{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:14px;padding:0 14px;font-size:13px;color:var(--rose2)}
+.btn-ghost:hover{background:rgba(255,77,121,.12)}
+.btn-main{width:100%;margin-top:10px;padding:15px;border-radius:16px;font-size:16px;font-weight:700;
+  background:linear-gradient(135deg,var(--rose),#c2185b);box-shadow:0 10px 30px rgba(255,77,121,.35);transition:transform .15s}
+.btn-main:hover{transform:translateY(-2px)}
+.btn-main:disabled{opacity:.5;transform:none}
+#lobbyStatus{min-height:22px;margin-top:16px;font-size:14px;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);margin-top:18px;line-height:1.5;opacity:.8}
+
+/* ---------- SALA ---------- */
+#room{position:relative;z-index:1;height:100%;display:grid;grid-template-rows:auto 1fr auto}
+header{display:flex;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid var(--line);background:rgba(20,6,13,.55);backdrop-filter:blur(10px)}
+header .logo{font-size:40px}
+.pill{display:flex;align-items:center;gap:8px;font-size:13px;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.dot{width:9px;height:9px;border-radius:50%;background:#888}
+.dot.on{background:#4ade80;box-shadow:0 0 10px #4ade80}
+.dot.wait{background:var(--gold);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+header .sp{flex:1}
+.hbtn{font-size:13px;font-weight:600;padding:9px 14px;border-radius:12px;background:rgba(245,193,108,.12);color:var(--gold);border:1px solid rgba(245,193,108,.25)}
+.hbtn:hover{background:rgba(245,193,108,.2)}
+
+.main{display:grid;grid-template-columns:1fr 320px;gap:14px;padding:14px;min-height:0}
+.stage{position:relative;border-radius:22px;overflow:hidden;background:#07020a;border:1px solid var(--line);min-height:0;
+  box-shadow:0 0 0 6px rgba(74,16,41,.35),0 20px 60px rgba(0,0,0,.5)}
+.stage video{width:100%;height:100%;object-fit:contain;background:#000}
+.stage-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;
+  background:radial-gradient(circle at 50% 40%,rgba(255,77,121,.12),transparent 60%)}
+.stage-empty .big{font-size:64px;margin-bottom:10px;animation:beat 1.6s infinite}
+@keyframes beat{0%,100%{transform:scale(1)}15%{transform:scale(1.15)}30%{transform:scale(1)}45%{transform:scale(1.1)}}
+.stage-empty h2{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;font-size:28px}
+.stage-empty p{color:var(--muted);margin-top:8px;max-width:420px;line-height:1.5}
+.curtain{position:absolute;top:0;bottom:0;width:7%;background:linear-gradient(90deg,#5a0f2c,#8b1a42 40%,#5a0f2c);opacity:.55;pointer-events:none}
+.curtain.l{left:0;border-radius:0 0 60% 0}
+.curtain.r{right:0;border-radius:0 0 0 60%}
+.stage-tag{position:absolute;top:14px;left:14px;font-size:12px;padding:6px 11px;border-radius:999px;background:rgba(0,0,0,.55);color:var(--gold);border:1px solid rgba(245,193,108,.3)}
+#reactLayer{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
+.fly{position:absolute;bottom:40px;font-size:46px;animation:fly 3.2s ease-out forwards;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5))}
+.fly small{font-size:11px;font-weight:700;background:rgba(0,0,0,.6);padding:2px 8px;border-radius:99px;margin-top:2px;color:var(--rose2)}
+@keyframes fly{0%{transform:translateY(0) scale(.4);opacity:0}12%{opacity:1;transform:translateY(-40px) scale(1.15)}
+  100%{transform:translateY(-70vh) translateX(var(--dx)) scale(1);opacity:0}}
+
+.side{display:flex;flex-direction:column;gap:12px;min-height:0}
+.cam{position:relative;border-radius:18px;overflow:hidden;background:#0c0408;border:2px solid var(--line);aspect-ratio:4/3}
+.cam video{width:100%;height:100%;object-fit:cover}
+.cam.me video{transform:scaleX(-1)}
+.cam.partner{border-color:rgba(255,77,121,.45)}
+.cam .name{position:absolute;left:10px;bottom:10px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:99px;background:rgba(0,0,0,.6)}
+.cam .flags{position:absolute;right:10px;bottom:10px;display:flex;gap:4px;font-size:14px}
+.cam .nocam{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Great Vibes',cursive;font-size:56px;color:var(--rose2);background:radial-gradient(circle,#3b0d24,#12050b)}
+.mini-row{display:grid;grid-template-columns:1fr;gap:12px}
+.chat{flex:1;min-height:120px;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.chat-log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:7px;font-size:14px}
+.msg{max-width:85%;padding:8px 12px;border-radius:14px;line-height:1.35;word-wrap:break-word}
+.msg.me{align-self:flex-end;background:linear-gradient(135deg,var(--rose),#c2185b);border-bottom-right-radius:4px}
+.msg.them{align-self:flex-start;background:rgba(255,255,255,.08);border-bottom-left-radius:4px}
+.msg.sys{align-self:center;background:none;color:var(--muted);font-size:12px;font-style:italic}
+.chat form{display:flex;border-top:1px solid var(--line)}
+.chat input{flex:1;background:transparent;border:none;padding:12px;outline:none;font-size:14px}
+.chat form button{padding:0 14px;background:none;font-size:18px}
+
+/* barra de controles */
+.controls{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 16px 16px;flex-wrap:wrap}
+.cbtn{width:52px;height:52px;border-radius:50%;font-size:21px;background:rgba(255,255,255,.07);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;transition:.15s;position:relative}
+.cbtn:hover{background:rgba(255,77,121,.18)}
+.cbtn.off{background:#5b1222;border-color:#a4243f}
+.cbtn.active{background:var(--rose);border-color:var(--rose)}
+.cbtn[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:62px;white-space:nowrap;font-size:12px;background:#000;padding:5px 9px;border-radius:8px}
+.react-bar{display:flex;gap:2px;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.react-bar button{background:none;font-size:24px;width:40px;height:40px;border-radius:50%;transition:transform .12s}
+.react-bar button:hover{transform:scale(1.3);background:rgba(255,255,255,.06)}
+.btn-rate{height:52px;padding:0 20px;border-radius:999px;font-weight:700;font-size:15px;background:linear-gradient(135deg,var(--gold),#e09a3a);color:#3a1020;box-shadow:0 8px 24px rgba(245,193,108,.25)}
+.btn-leave{background:#7a1630!important}
+.vol{display:flex;align-items:center;gap:6px;font-size:16px;padding:0 10px;height:52px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.vol input{accent-color:var(--rose);width:90px}
+
+/* tela cheia */
+#room:fullscreen{background:#000}
+#room:fullscreen header,#room:fullscreen .chat{display:none}
+#room:fullscreen .main{grid-template-columns:1fr;padding:0}
+#room:fullscreen .stage{border-radius:0;border:none;box-shadow:none}
+#room:fullscreen .side{position:absolute;top:16px;right:16px;width:220px;z-index:6}
+#room:fullscreen .controls{position:absolute;bottom:0;left:0;right:0;z-index:7;opacity:0;transition:opacity .3s;background:linear-gradient(transparent,rgba(0,0,0,.8))}
+#room:fullscreen .controls:hover{opacity:1}
+
+/* ---------- MODAIS ---------- */
+.modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(10,2,6,.72);backdrop-filter:blur(6px);animation:fade .25s}
+@keyframes fade{from{opacity:0}}
+.mcard{width:min(520px,100%);max-height:92vh;overflow-y:auto;background:linear-gradient(160deg,#3a0f25,#1d0711);border:1px solid rgba(245,193,108,.25);border-radius:26px;padding:28px;box-shadow:0 30px 90px rgba(0,0,0,.6);animation:pop .3s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.mcard h2{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;font-size:28px;text-align:center}
+.mcard .sub{text-align:center;color:var(--muted);font-size:14px;margin:4px 0 20px}
+.mcard .field input,.mcard .field select,.mcard .field textarea{width:100%;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:15px;outline:none}
+.mcard .field textarea{resize:vertical;min-height:60px}
+.mcard select option{background:#2a0b1b}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.vote{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:16px;background:rgba(0,0,0,.25);border:1px solid var(--line);margin-bottom:10px}
+.vote .who{font-weight:700;font-size:14px}
+.vote .who small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:2px}
+.stars{display:flex;gap:4px}
+.stars button{background:none;font-size:32px;color:rgba(255,255,255,.18);transition:transform .12s,color .12s;line-height:1}
+.stars button.on{color:var(--gold);text-shadow:0 0 12px rgba(245,193,108,.6)}
+.stars:not(.ro) button:hover{transform:scale(1.2)}
+.stars.ro button{cursor:default}
+.avg{text-align:center;margin:14px 0 4px;font-family:'Playfair Display',serif;font-size:18px;color:var(--gold);min-height:24px}
+.mactions{display:flex;gap:10px;margin-top:18px}
+.mactions button{flex:1;padding:13px;border-radius:14px;font-weight:700}
+.b-sec{background:rgba(255,255,255,.07);border:1px solid var(--line)!important}
+.b-pri{background:linear-gradient(135deg,var(--rose),#c2185b)}
+.b-pri:disabled{opacity:.4}
+
+/* ranking */
+.rcard{width:min(760px,100%)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0 18px}
+.stat{text-align:center;padding:14px;border-radius:16px;background:rgba(0,0,0,.25);border:1px solid var(--line)}
+.stat b{display:block;font-family:'Playfair Display',serif;font-size:26px;color:var(--gold)}
+.stat span{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:6px;justify-content:center;margin-bottom:14px}
+.tabs button{padding:8px 16px;border-radius:99px;font-size:13px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.tabs button.on{background:var(--rose);border-color:var(--rose)}
+.rlist{display:flex;flex-direction:column;gap:9px}
+.ritem{display:grid;grid-template-columns:46px 1fr auto;gap:14px;align-items:center;padding:13px 15px;border-radius:16px;background:rgba(0,0,0,.25);border:1px solid var(--line)}
+.ritem .pos{font-family:'Playfair Display',serif;font-size:24px;text-align:center;color:var(--muted)}
+.ritem.top .pos{font-size:30px}
+.ritem h4{font-size:16px;font-weight:700}
+.ritem .meta{font-size:12px;color:var(--muted);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.badge{font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:99px;background:rgba(245,193,108,.15);color:var(--gold)}
+.ritem .note{font-size:13px;font-style:italic;color:var(--rose2);margin-top:5px}
+.ritem .score{text-align:right}
+.ritem .score b{font-family:'Playfair Display',serif;font-size:24px;color:var(--gold)}
+.ritem .score .ss{font-size:13px;color:var(--gold);letter-spacing:1px}
+.del{background:none;color:var(--muted);font-size:12px;margin-top:4px;opacity:.6}
+.del:hover{opacity:1;color:var(--rose)}
+.del.confirm{color:var(--rose);opacity:1;font-weight:700}
+.empty{text-align:center;padding:30px;color:var(--muted);font-style:italic}
+.rfoot{display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap}
+.rfoot button,.rfoot label{font-size:12px;padding:8px 13px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);cursor:pointer}
+
+#toast{position:fixed;top:76px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+#toast div{background:rgba(30,8,19,.95);border:1px solid var(--rose);padding:10px 18px;border-radius:99px;font-size:14px;animation:pop .3s;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+#unmute{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:60;padding:12px 20px;border-radius:99px;background:var(--rose);font-weight:700}
+
+@media (max-width:900px){
+  body{overflow:auto}
+  #room{height:auto;min-height:100%}
+  .main{grid-template-columns:1fr}
+  .stage{aspect-ratio:16/9}
+  .side{display:grid;grid-template-columns:1fr 1fr}
+  .chat{grid-column:1/-1;min-height:220px}
+  header .logo{font-size:32px}
+  .react-bar{order:-1;width:100%;justify-content:center;flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+<div id="hearts"></div>
+<div id="toast"></div>
+
+<!-- ================= LOBBY ================= -->
+<section id="lobby">
+  <div class="lobby-card">
+    <div class="strip"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="logo">Cine<b>G+J</b></div>
+    <p class="tagline">onde a distância vira só um detalhe</p>
+    <div class="field">
+      <label>Seu nome</label>
+      <input id="inName" maxlength="20" placeholder="Como seu amor te chama?">
+    </div>
+    <div class="field">
+      <label>Código da nossa sala</label>
+      <div class="code-row">
+        <input id="inCode" maxlength="24" placeholder="ex.: gj-a7k3p9">
+        <button class="btn-ghost" id="btnGen" type="button">Gerar</button>
+        <button class="btn-ghost" id="btnCopyLink" type="button" title="Copiar link">🔗</button>
+      </div>
+    </div>
+    <button class="btn-main" id="btnEnter">Entrar no nosso cinema 💕</button>
+    <div id="lobbyStatus"></div>
+    <p class="hint">Vocês dois usam o <b>mesmo código</b>. Quem chegar primeiro abre a sala, e o outro entra direto.<br>Dica: usem fone de ouvido pra não dar eco 🎧</p>
+  </div>
+</section>
+
+<!-- ================= SALA ================= -->
+<section id="room" class="hidden">
+  <header>
+    <div class="logo">Cine<b>G+J</b></div>
+    <div class="pill"><span class="dot wait" id="connDot"></span><span id="connText">Esperando seu amor…</span></div>
+    <div class="pill">🎟️ <span id="roomCode"></span></div>
+    <div class="sp"></div>
+    <button class="hbtn" id="btnRanking">🏆 Nosso ranking</button>
+  </header>
+
+  <div class="main">
+    <div class="stage" id="stage">
+      <video id="stageVideo" playsinline autoplay class="hidden"></video>
+      <div class="stage-empty" id="stageEmpty">
+        <div class="curtain l"></div><div class="curtain r"></div>
+        <div class="big">🍿</div>
+        <h2>A sessão vai começar…</h2>
+        <p>Um de vocês clica em <b>🖥️ Compartilhar tela</b> e escolhe a aba do filme. No Chrome, marque <b>"Compartilhar áudio da guia"</b> pra ir o som também.</p>
+      </div>
+      <div class="stage-tag hidden" id="stageTag"></div>
+      <div id="reactLayer"></div>
+    </div>
+
+    <div class="side">
+      <div class="cam partner">
+        <video id="partnerCam" playsinline autoplay></video>
+        <div class="nocam" id="partnerNoCam">♥</div>
+        <div class="name" id="partnerName">Seu amor</div>
+        <div class="flags" id="partnerFlags"></div>
+      </div>
+      <div class="cam me">
+        <video id="myCam" playsinline autoplay muted></video>
+        <div class="nocam hidden" id="myNoCam">♥</div>
+        <div class="name" id="myName">Você</div>
+      </div>
+      <div class="chat">
+        <div class="chat-log" id="chatLog"></div>
+        <form id="chatForm"><input id="chatIn" maxlength="300" placeholder="Mande um recadinho… 💌" autocomplete="off"><button>➤</button></form>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="cbtn" id="btnMic" data-tip="Microfone">🎙️</button>
+    <button class="cbtn" id="btnCam" data-tip="Câmera">📷</button>
+    <button class="cbtn" id="btnShare" data-tip="Compartilhar tela">🖥️</button>
+    <div class="react-bar" id="reactBar"></div>
+    <div class="vol hidden" id="volBox" title="Volume do filme">🔊<input type="range" id="vol" min="0" max="1" step="0.05" value="1"></div>
+    <button class="btn-rate" id="btnRate">⭐ Avaliar</button>
+    <button class="cbtn" id="btnFull" data-tip="Tela cheia">⛶</button>
+    <button class="cbtn btn-leave" id="btnLeave" data-tip="Sair">🚪</button>
+  </div>
+</section>
+
+<!-- ================= MODAL AVALIAÇÃO ================= -->
+<div class="modal hidden" id="rateModal">
+  <div class="mcard">
+    <h2>Como foi a sessão?</h2>
+    <p class="sub">Avaliem juntos — aparece na tela dos dois 💞</p>
+    <div class="field"><label>O que assistimos</label><input id="rTitle" maxlength="80" placeholder="Nome do filme ou série"></div>
+    <div class="row2">
+      <div class="field"><label>Tipo</label><select id="rType"><option>Filme</option><option>Série</option></select></div>
+      <div class="field"><label>Data</label><input type="date" id="rDate"></div>
+    </div>
+    <div class="field"><label>Uma lembrança desse momento (opcional)</label><textarea id="rNote" maxlength="160" placeholder="Ex.: choramos no final juntos 🥹"></textarea></div>
+    <div class="vote"><div class="who" id="rMeLabel">Sua nota<small>toque nas estrelas</small></div><div class="stars" id="myStars"></div></div>
+    <div class="vote"><div class="who" id="rPartnerLabel">Nota do seu amor<small id="rPartnerWait">aguardando…</small></div><div class="stars ro" id="partnerStars"></div></div>
+    <div class="avg" id="rAvg"></div>
+    <div class="mactions">
+      <button class="b-sec" id="rCancel">Cancelar</button>
+      <button class="b-pri" id="rSave" disabled>Salvar no ranking 💖</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL RANKING ================= -->
+<div class="modal hidden" id="rankModal">
+  <div class="mcard rcard">
+    <h2>Nosso ranking 🏆</h2>
+    <p class="sub">Tudo que já assistimos juntinhos</p>
+    <div class="stats">
+      <div class="stat"><b id="stTotal">0</b><span>sessões juntos</span></div>
+      <div class="stat"><b id="stAvg">–</b><span>média do casal</span></div>
+      <div class="stat"><b id="stMatch">–</b><span>notas iguais</span></div>
+    </div>
+    <div class="tabs" id="rankTabs">
+      <button data-f="all" class="on">Todos</button><button data-f="Filme">Filmes</button><button data-f="Série">Séries</button>
+    </div>
+    <div class="rlist" id="rankList"></div>
+    <div class="rfoot">
+      <button id="bExport">⬇️ Baixar backup</button>
+      <label>⬆️ Importar backup<input type="file" id="bImport" accept=".json" hidden></label>
+      <button id="rankClose">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const PREFIX = 'cinegj-v1-';
+const ICE = { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' }
+]};
+const REACTIONS = ['❤️','😂','😱','😭','😍','🔥','🍿','😴','🤯','💋'];
+
+function load(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
+function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+const S = {
+  me: '', partner: '', room: '', hostId: '', isHost: false,
+  peer: null, conn: null, remoteId: null,
+  local: null, screen: null, camCall: null, screenCall: null, remoteScreenCall: null,
+  stageMode: 'none', mic: true, cam: true, noCam: false,
+  partnerStatus: { mic: true, cam: true },
+  rank: load('cinegj-ranking', { items: [], deleted: [] }),
+  rating: null, filter: 'all', attempts: 0, inRoom: false, leaving: false
+};
+
+/* ---------- fundo de corações ---------- */
+(function(){
+  const h = $('#hearts');
+  for(let i=0;i<18;i++){
+    const s = document.createElement('span');
+    s.textContent = Math.random() > .5 ? '♥' : '❤';
+    s.style.left = Math.random()*100 + '%';
+    s.style.fontSize = (12 + Math.random()*26) + 'px';
+    s.style.animationDuration = (14 + Math.random()*18) + 's';
+    s.style.animationDelay = (-Math.random()*30) + 's';
+    h.appendChild(s);
+  }
+})();
+
+function toast(msg){
+  const d = document.createElement('div'); d.textContent = msg;
+  $('#toast').appendChild(d); setTimeout(()=>d.remove(), 3600);
+}
+function send(obj){ if(S.conn && S.conn.open){ try{ S.conn.send(obj); }catch(e){} } }
+function connected(){ return !!(S.conn && S.conn.open); }
+
+/* ---------- LOBBY ---------- */
+function genCode(){ const c='abcdefghjkmnpqrstuvwxyz23456789'; let s='gj-'; for(let i=0;i<6;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
+function cleanCode(v){ return v.trim().toLowerCase().replace(/[^a-z0-9-]/g,''); }
+$('#inName').value = load('cinegj-name', '');
+$('#inCode').value = cleanCode(location.hash.slice(1)) || load('cinegj-room', '');
+$('#btnGen').onclick = () => { $('#inCode').value = genCode(); };
+$('#btnCopyLink').onclick = async () => {
+  const code = cleanCode($('#inCode').value); if(!code){ toast('Gere ou digite um código primeiro'); return; }
+  const link = location.protocol.startsWith('http') ? location.origin + location.pathname + '#' + code : code;
+  try{ await navigator.clipboard.writeText(link); toast('Copiado! Manda pro seu amor 💌'); }catch(e){ toast(link); }
+};
+function lobbyStatus(t){ $('#lobbyStatus').textContent = t; }
+
+$('#btnEnter').onclick = async () => {
+  const name = $('#inName').value.trim();
+  let code = cleanCode($('#inCode').value);
+  if(!name){ lobbyStatus('Coloca seu nome 💕'); $('#inName').focus(); return; }
+  if(code.length < 4){ lobbyStatus('Use um código com pelo menos 4 caracteres (ou clique em Gerar)'); return; }
+  if(typeof Peer === 'undefined'){ lobbyStatus('Não consegui carregar a conexão. Verifique a internet e recarregue.'); return; }
+  S.me = name; S.room = code; S.hostId = PREFIX + code;
+  store('cinegj-name', name); store('cinegj-room', code);
+  $('#btnEnter').disabled = true;
+  lobbyStatus('Ligando câmera e microfone…');
+  S.local = await getLocalMedia();
+  lobbyStatus('Procurando seu amor na sala…');
+  S.attempts = 0;
+  tryJoin();
+};
+
+async function getLocalMedia(){
+  const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  try{
+    return await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio });
+  }catch(e){
+    try{
+      const s = await navigator.mediaDevices.getUserMedia({ audio });
+      toast('Câmera indisponível — entrando só com áudio');
+      return withBlankVideo(s);
+    }catch(e2){
+      toast('Sem câmera e microfone — você ainda pode ver e reagir');
+      S.mic = false;
+      return withBlankVideo(new MediaStream());
+    }
+  }
+}
+function withBlankVideo(stream){
+  const c = document.createElement('canvas'); c.width = 320; c.height = 240;
+  const x = c.getContext('2d');
+  const draw = () => { x.fillStyle = '#1a0610'; x.fillRect(0,0,320,240); };
+  draw(); setInterval(draw, 1000);
+  stream.addTrack(c.captureStream(1).getVideoTracks()[0]);
+  S.noCam = true; S.cam = false;
+  return stream;
+}
+
+/* ---------- CONEXÃO (PeerJS) ---------- */
+function destroyPeer(){ if(S.peer){ try{ S.peer.destroy(); }catch(e){} S.peer = null; } }
+
+function tryJoin(){
+  if(++S.attempts > 6){
+    lobbyStatus('Não consegui conectar. Confira a internet e tente de novo.');
+    $('#btnEnter').disabled = false; return;
+  }
+  destroyPeer();
+  const p = new Peer({ config: ICE, debug: 1 });
+  S.peer = p; S.isHost = false;
+  let timer;
+  p.on('open', () => {
+    const c = p.connect(S.hostId, { reliable: true });
+    setupConn(c);
+    timer = setTimeout(() => { if(!c.open && S.peer === p){ lobbyStatus('Demorando… tentando de novo'); tryJoin(); } }, 15000);
+    c.on('open', () => clearTimeout(timer));
+  });
+  p.on('error', err => {
+    clearTimeout(timer);
+    if(err.type === 'peer-unavailable'){ becomeHost(); }
+    else peerError(err);
+  });
+  p.on('call', handleCall);
+}
+
+function becomeHost(){
+  destroyPeer();
+  const p = new Peer(S.hostId, { config: ICE, debug: 1 });
+  S.peer = p; S.isHost = true;
+  p.on('open', () => { enterRoom(); setConn('wait'); });
+  p.on('connection', c => {
+    if(connected()){ c.on('open', () => { c.send({ t: 'full' }); setTimeout(() => c.close(), 600); }); return; }
+    setupConn(c);
+  });
+  p.on('call', handleCall);
+  p.on('disconnected', () => { if(!S.leaving){ try{ p.reconnect(); }catch(e){} } });
+  p.on('error', err => {
+    if(err.type === 'unavailable-id'){ setTimeout(tryJoin, 900); }
+    else peerError(err);
+  });
+}
+
+function peerError(err){
+  console.warn('peer error', err.type, err);
+  if(['network','server-error','socket-error','socket-closed'].includes(err.type)){
+    if(!S.inRoom){ lobbyStatus('Problema de rede. Tentando de novo…'); setTimeout(tryJoin, 2000); }
+    else toast('Oscilação na conexão… 📶');
+  }else if(err.type === 'browser-incompatible'){
+    lobbyStatus('Seu navegador não suporta chamadas. Use Chrome, Edge ou Firefox atualizados.');
+  }
+}
+
+function setupConn(c){
+  S.conn = c;
+  c.on('open', () => {
+    S.remoteId = c.peer;
+    enterRoom(); setConn('on');
+    send({ t: 'hello', name: S.me, ranking: S.rank, status: { mic: S.mic, cam: S.cam } });
+    if(!S.isHost) startCamCall();
+    if(S.screen) callScreen();
+  });
+  c.on('data', onData);
+  c.on('close', onConnClose);
+  c.on('error', e => console.warn('conn error', e));
+}
+
+function onConnClose(){
+  if(S.leaving) return;
+  if(S.conn && S.conn.open) return;
+  setConn('wait');
+  addChat(null, `${S.partner || 'Seu amor'} saiu da sala 💔`);
+  toast(`${S.partner || 'Seu amor'} desconectou`);
+  clearPartnerCam();
+  if(S.stageMode === 'remote') showStage('none');
+  if(S.camCall){ try{ S.camCall.close(); }catch(e){} S.camCall = null; }
+  if(S.screenCall){ try{ S.screenCall.close(); }catch(e){} S.screenCall = null; }
+  if(!S.isHost){
+    // o anfitrião saiu: eu viro o anfitrião e espero ele(a) voltar
+    setTimeout(() => { if(!connected() && !S.leaving){ S.attempts = 0; tryJoin(); } }, 1500);
+  }
+}
+
+/* ---------- CHAMADAS DE MÍDIA ---------- */
+function startCamCall(){
+  if(!S.peer || !S.remoteId || !S.local) return;
+  const call = S.peer.call(S.remoteId, S.local, { metadata: { type: 'cam' } });
+  bindCamCall(call);
+}
+function bindCamCall(call){
+  S.camCall = call;
+  call.on('stream', s => {
+    const v = $('#partnerCam'); v.srcObject = s;
+    v.play().catch(() => showUnmute());
+    updatePartnerCam();
+  });
+  call.on('close', () => { if(S.camCall === call) clearPartnerCam(); });
+}
+function handleCall(call){
+  const type = call.metadata && call.metadata.type;
+  if(type === 'cam'){
+    call.answer(S.local);
+    bindCamCall(call);
+  }else if(type === 'screen'){
+    if(S.screen) stopShare(true); // só uma tela por vez
+    call.answer();
+    S.remoteScreenCall = call;
+    call.on('stream', s => {
+      const v = $('#stageVideo'); v.srcObject = s; v.muted = false; v.volume = +$('#vol').value;
+      showStage('remote');
+      v.play().catch(() => showUnmute());
+    });
+    call.on('close', () => { if(S.remoteScreenCall === call && S.stageMode === 'remote') showStage('none'); });
+  }
+}
+function showUnmute(){
+  if($('#unmute')) return;
+  const b = document.createElement('button'); b.id = 'unmute'; b.textContent = '🔊 Toque para ativar o som';
+  b.onclick = () => { $('#partnerCam').play().catch(()=>{}); $('#stageVideo').play().catch(()=>{}); b.remove(); };
+  document.body.appendChild(b);
+}
+function clearPartnerCam(){ $('#partnerCam').srcObject = null; $('#partnerNoCam').classList.remove('hidden'); }
+function updatePartnerCam(){
+  const hasStream = !!$('#partnerCam').srcObject;
+  $('#partnerNoCam').classList.toggle('hidden', hasStream && S.partnerStatus.cam);
+  $('#partnerFlags').textContent = (S.partnerStatus.mic ? '' : '🔇') + (S.partnerStatus.cam ? '' : '📷̸');
+}
+
+/* ---------- COMPARTILHAR TELA ---------- */
+async function startShare(){
+  if(!navigator.mediaDevices.getDisplayMedia){ toast('Seu navegador não permite compartilhar tela aqui'); return; }
+  try{
+    S.screen = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
+      systemAudio: 'include'
+    });
+  }catch(e){ return; }
+  const vt = S.screen.getVideoTracks()[0];
+  if(vt){ try{ vt.contentHint = 'motion'; }catch(e){} vt.onended = () => stopShare(); }
+  if(!S.screen.getAudioTracks().length) toast('Sem áudio! Compartilhe uma ABA e marque "Compartilhar áudio" 🔈');
+  if(S.stageMode === 'remote' && S.remoteScreenCall){ try{ S.remoteScreenCall.close(); }catch(e){} }
+  const v = $('#stageVideo'); v.srcObject = S.screen; v.muted = true; v.play().catch(()=>{});
+  showStage('local');
+  $('#btnShare').classList.add('active');
+  callScreen();
+  addChat(null, 'Você começou a sessão 🎬');
+  send({ t: 'sys', m: `${S.me} começou a sessão 🎬` });
+}
+function callScreen(){
+  if(!S.peer || !S.remoteId || !S.screen || !connected()) return;
+  if(S.screenCall){ try{ S.screenCall.close(); }catch(e){} }
+  const call = S.peer.call(S.remoteId, S.screen, { metadata: { type: 'screen' } });
+  S.screenCall = call;
+  boostQuality(call);
+}
+function boostQuality(call){
+  const apply = () => {
+    const pc = call.peerConnection; if(!pc) return;
+    pc.getSenders().forEach(snd => {
+      if(snd.track && snd.track.kind === 'video'){
+        const p = snd.getParameters();
+        if(!p.encodings || !p.encodings.length) p.encodings = [{}];
+        p.encodings[0].maxBitrate = 4500000;
+        p.encodings[0].maxFramerate = 30;
+        p.degradationPreference = 'maintain-framerate';
+        snd.setParameters(p).catch(()=>{});
+      }
+    });
+  };
+  setTimeout(apply, 1500); setTimeout(apply, 5000);
+}
+function stopShare(silent){
+  if(S.screen){ S.screen.getTracks().forEach(t => t.stop()); S.screen = null; }
+  if(S.screenCall){ try{ S.screenCall.close(); }catch(e){} S.screenCall = null; }
+  $('#btnShare').classList.remove('active');
+  if(S.stageMode === 'local') showStage('none');
+  if(!silent) send({ t: 'screen-stop' });
+}
+function showStage(mode){
+  S.stageMode = mode;
+  const v = $('#stageVideo');
+  if(mode === 'none'){ v.srcObject = null; }
+  v.classList.toggle('hidden', mode === 'none');
+  $('#stageEmpty').classList.toggle('hidden', mode !== 'none');
+  $('#volBox').classList.toggle('hidden', mode !== 'remote');
+  const tag = $('#stageTag');
+  tag.classList.toggle('hidden', mode === 'none');
+  tag.textContent = mode === 'local' ? '🎬 Você está transmitindo' : `🎬 Tela de ${S.partner || 'seu amor'}`;
+}
+$('#vol').oninput = e => { $('#stageVideo').volume = +e.target.value; };
+
+/* ---------- SALA / UI ---------- */
+function enterRoom(){
+  if(S.inRoom) return;
+  S.inRoom = true;
+  $('#lobby').classList.add('hidden'); $('#room').classList.remove('hidden');
+  $('#roomCode').textContent = S.room;
+  $('#myName').textContent = S.me + ' (você)';
+  $('#myCam').srcObject = S.local;
+  $('#myNoCam').classList.toggle('hidden', !S.noCam);
+  refreshToggles();
+  addChat(null, 'Bem-vindo(a) ao Cine G+J 💕');
+}
+function setConn(state){
+  const d = $('#connDot'); d.className = 'dot ' + (state === 'on' ? 'on' : 'wait');
+  $('#connText').textContent = state === 'on' ? `Juntinhos com ${S.partner || 'seu amor'} 💞` : 'Esperando seu amor…';
+}
+function refreshToggles(){
+  $('#btnMic').classList.toggle('off', !S.mic); $('#btnMic').textContent = S.mic ? '🎙️' : '🔇';
+  $('#btnCam').classList.toggle('off', !S.cam);
+  $('#myNoCam').classList.toggle('hidden', S.cam && !S.noCam);
+}
+$('#btnMic').onclick = () => {
+  const tr = S.local.getAudioTracks(); if(!tr.length){ toast('Microfone indisponível'); return; }
+  S.mic = !S.mic; tr.forEach(t => t.enabled = S.mic);
+  refreshToggles(); send({ t: 'status', mic: S.mic, cam: S.cam });
+};
+$('#btnCam').onclick = () => {
+  if(S.noCam){ toast('Câmera indisponível'); return; }
+  S.cam = !S.cam; S.local.getVideoTracks().forEach(t => t.enabled = S.cam);
+  refreshToggles(); send({ t: 'status', mic: S.mic, cam: S.cam });
+};
+$('#btnShare').onclick = () => { S.screen ? stopShare() : startShare(); };
+$('#btnFull').onclick = () => {
+  const r = $('#room');
+  if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+  else r.requestFullscreen().catch(() => toast('Tela cheia não disponível'));
+};
+$('#btnLeave').onclick = () => {
+  S.leaving = true;
+  send({ t: 'bye' });
+  stopShare(true);
+  if(S.local) S.local.getTracks().forEach(t => t.stop());
+  setTimeout(() => { destroyPeer(); location.reload(); }, 300);
+};
+window.addEventListener('beforeunload', () => { send({ t: 'bye' }); });
+
+/* ---------- REAÇÕES & CHAT ---------- */
+REACTIONS.forEach(e => {
+  const b = document.createElement('button'); b.textContent = e; b.title = 'Reagir';
+  b.onclick = () => { spawnReaction(e, S.me); send({ t: 'react', e }); };
+  $('#reactBar').appendChild(b);
+});
+function spawnReaction(e, who){
+  const el = document.createElement('div'); el.className = 'fly';
+  el.style.left = (8 + Math.random()*80) + '%';
+  el.style.setProperty('--dx', (Math.random()*120 - 60) + 'px');
+  if(e === '💋' || e === '❤️') el.style.fontSize = '60px';
+  el.innerHTML = `<span>${e}</span><small></small>`;
+  el.querySelector('small').textContent = who;
+  $('#reactLayer').appendChild(el);
+  setTimeout(() => el.remove(), 3300);
+}
+function burst(){ for(let i=0;i<14;i++) setTimeout(() => spawnReaction(['❤️','💖','💕','⭐'][i%4], ''), i*90); }
+function addChat(who, text){
+  const d = document.createElement('div');
+  d.className = 'msg ' + (who === null ? 'sys' : who === S.me ? 'me' : 'them');
+  d.textContent = text;
+  const log = $('#chatLog'); log.appendChild(d); log.scrollTop = log.scrollHeight;
+}
+$('#chatForm').onsubmit = e => {
+  e.preventDefault();
+  const m = $('#chatIn').value.trim(); if(!m) return;
+  addChat(S.me, m); send({ t: 'chat', m }); $('#chatIn').value = '';
+};
+
+/* ---------- MENSAGENS DO PARCEIRO ---------- */
+function onData(d){
+  if(!d || !d.t) return;
+  switch(d.t){
+    case 'hello':
+      S.partner = d.name || 'Seu amor';
+      $('#partnerName').textContent = S.partner;
+      if(d.status){ S.partnerStatus = d.status; updatePartnerCam(); }
+      setConn('on');
+      mergeRanking(d.ranking);
+      addChat(null, `${S.partner} chegou 💕`); toast(`${S.partner} entrou no cinema 💕`);
+      if(S.rating) send({ t: 'rate-open', rating: S.rating });
+      renderRate();
+      break;
+    case 'full': lobbyStatus('Essa sala já tem duas pessoas 💑'); toast('Sala cheia'); break;
+    case 'bye': break;
+    case 'react': spawnReaction(d.e, S.partner); break;
+    case 'chat': addChat(S.partner, d.m); break;
+    case 'sys': addChat(null, d.m); break;
+    case 'status': S.partnerStatus = { mic: d.mic, cam: d.cam }; updatePartnerCam(); break;
+    case 'screen-stop':
+      if(S.stageMode === 'remote') showStage('none');
+      if(S.remoteScreenCall){ try{ S.remoteScreenCall.close(); }catch(e){} S.remoteScreenCall = null; }
+      addChat(null, 'A transmissão terminou 🎞️');
+      break;
+    case 'rate-open': S.rating = d.rating; openRate(); break;
+    case 'rate-update':
+      if(S.rating){ S.rating[d.f] = d.v; fillRateFields(d.f); renderRate(); }
+      break;
+    case 'rate-star':
+      if(S.rating){ S.rating.stars[d.who] = d.n; renderRate(); }
+      break;
+    case 'rate-save': addEntry(d.entry); closeRate(); burst(); toast(`"${d.entry.title}" entrou pro nosso ranking 💖`); break;
+    case 'rate-cancel': closeRate(); break;
+    case 'rank-del': deleteEntry(d.id, false); break;
+    case 'rank-sync': mergeRanking(d.ranking); break;
+  }
+}
+
+/* ---------- AVALIAÇÃO ---------- */
+function today(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+(function buildStars(){
+  for(let i=1;i<=5;i++){
+    const b = document.createElement('button'); b.textContent = '★'; b.dataset.n = i;
+    b.onclick = () => { if(!S.rating) return; S.rating.stars[S.me] = i; send({ t: 'rate-star', who: S.me, n: i }); renderRate(); };
+    b.onmouseenter = () => hoverStars(i); b.onmouseleave = () => hoverStars(0);
+    $('#myStars').appendChild(b);
+    const p = document.createElement('button'); p.textContent = '★'; p.tabIndex = -1;
+    $('#partnerStars').appendChild(p);
+  }
+})();
+function hoverStars(n){
+  const mine = n || (S.rating && S.rating.stars[S.me]) || 0;
+  [...$('#myStars').children].forEach((b,i) => b.classList.toggle('on', i < mine));
+}
+$('#btnRate').onclick = () => {
+  if(!S.rating){
+    S.rating = { id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), title: '', type: 'Filme', date: today(), note: '', stars: {} };
+    send({ t: 'rate-open', rating: S.rating });
+  }
+  openRate();
+  setTimeout(() => $('#rTitle').focus(), 100);
+};
+function openRate(){ fillRateFields(); renderRate(); $('#rateModal').classList.remove('hidden'); }
+function closeRate(){ S.rating = null; $('#rateModal').classList.add('hidden'); }
+function fillRateFields(only){
+  const r = S.rating; if(!r) return;
+  const map = { title: '#rTitle', type: '#rType', date: '#rDate', note: '#rNote' };
+  Object.entries(map).forEach(([f, sel]) => {
+    if(only && only !== f) return;
+    const el = $(sel); if(el.value !== r[f]) el.value = r[f];
+  });
+}
+[['title','#rTitle'],['type','#rType'],['date','#rDate'],['note','#rNote']].forEach(([f, sel]) => {
+  $(sel).addEventListener('input', e => { if(!S.rating) return; S.rating[f] = e.target.value; send({ t: 'rate-update', f, v: e.target.value }); renderRate(); });
+});
+function partnerKey(){
+  if(!S.rating) return null;
+  return Object.keys(S.rating.stars).find(k => k !== S.me) || S.partner || null;
+}
+function renderRate(){
+  const r = S.rating; if(!r) return;
+  const mine = r.stars[S.me] || 0;
+  const pk = partnerKey(); const theirs = pk ? (r.stars[pk] || 0) : 0;
+  hoverStars(0);
+  [...$('#partnerStars').children].forEach((b,i) => b.classList.toggle('on', i < theirs));
+  const pname = S.partner || 'seu amor';
+  $('#rPartnerLabel').firstChild.textContent = `Nota de ${pname}`;
+  $('#rPartnerWait').textContent = theirs ? 'já avaliou ✓' : (connected() ? 'escolhendo as estrelas…' : 'não está na sala');
+  $('#rMeLabel').firstChild.textContent = `Sua nota`;
+  const vals = Object.values(r.stars).filter(Boolean);
+  $('#rAvg').textContent = vals.length ? `Média: ${(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1)} ★` + (vals.length === 2 && vals[0] === vals[1] ? '  — sintonia total 💞' : '') : '';
+  const ready = r.title.trim() && mine && (theirs || !connected());
+  $('#rSave').disabled = !ready;
+  $('#rSave').textContent = ready ? 'Salvar no ranking 💖' : (!r.title.trim() ? 'Falta o nome' : !mine ? 'Falta sua nota' : `Esperando ${pname}…`);
+}
+$('#rCancel').onclick = () => { send({ t: 'rate-cancel' }); closeRate(); };
+$('#rSave').onclick = () => {
+  const r = S.rating; if(!r) return;
+  const vals = Object.values(r.stars).filter(Boolean);
+  const entry = { id: r.id, title: r.title.trim(), type: r.type, date: r.date || today(), note: r.note.trim(), stars: { ...r.stars },
+    avg: vals.reduce((a,b)=>a+b,0)/vals.length, updated: Date.now() };
+  addEntry(entry); send({ t: 'rate-save', entry });
+  closeRate(); burst(); toast('Salvo no nosso ranking 💖');
+};
+
+/* ---------- RANKING ---------- */
+function saveRank(){ store('cinegj-ranking', S.rank); }
+function addEntry(e){
+  S.rank.items = S.rank.items.filter(x => x.id !== e.id); S.rank.items.push(e);
+  saveRank(); renderRanking();
+}
+function deleteEntry(id, broadcast){
+  S.rank.items = S.rank.items.filter(x => x.id !== id);
+  if(!S.rank.deleted.includes(id)) S.rank.deleted.push(id);
+  saveRank(); renderRanking();
+  if(broadcast) send({ t: 'rank-del', id });
+}
+function mergeRanking(r){
+  if(!r) return;
+  const del = new Set([...(S.rank.deleted||[]), ...(r.deleted||[])]);
+  const map = new Map();
+  [...S.rank.items, ...(r.items||[])].forEach(e => {
+    if(!e || del.has(e.id)) return;
+    const ex = map.get(e.id);
+    if(!ex || (e.updated||0) > (ex.updated||0)) map.set(e.id, e);
+  });
+  S.rank = { items: [...map.values()], deleted: [...del] };
+  saveRank(); renderRanking();
+}
+function fmtDate(s){ if(!s) return ''; const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; }
+function starStr(n){ return '★'.repeat(n) + '☆'.repeat(5-n); }
+function esc(s){ const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+function renderRanking(){
+  const all = S.rank.items;
+  $('#stTotal').textContent = all.length;
+  $('#stAvg').textContent = all.length ? (all.reduce((a,e)=>a+e.avg,0)/all.length).toFixed(1) + '★' : '–';
+  const pairs = all.filter(e => Object.values(e.stars).length >= 2);
+  const same = pairs.filter(e => { const v = Object.values(e.stars); return v.every(x => x === v[0]); }).length;
+  $('#stMatch').textContent = pairs.length ? Math.round(same/pairs.length*100) + '%' : '–';
+
+  const list = all.filter(e => S.filter === 'all' || e.type === S.filter)
+    .sort((a,b) => b.avg - a.avg || (b.date||'').localeCompare(a.date||''));
+  const box = $('#rankList'); box.innerHTML = '';
+  if(!list.length){ box.innerHTML = '<div class="empty">Nada por aqui ainda… bora dar play no primeiro? 🍿</div>'; return; }
+  const medals = ['🥇','🥈','🥉'];
+  list.forEach((e, i) => {
+    const el = document.createElement('div'); el.className = 'ritem' + (i < 3 ? ' top' : '');
+    const who = Object.entries(e.stars).map(([n,v]) => `${esc(n)}: <span style="color:var(--gold)">${starStr(v)}</span>`).join(' · ');
+    el.innerHTML = `
+      <div class="pos">${medals[i] || (i+1) + 'º'}</div>
+      <div>
+        <h4>${esc(e.title)}</h4>
+        <div class="meta"><span class="badge">${esc(e.type)}</span><span>📅 ${fmtDate(e.date)}</span><span>${who}</span></div>
+        ${e.note ? `<div class="note">“${esc(e.note)}”</div>` : ''}
+      </div>
+      <div class="score"><b>${e.avg.toFixed(1)}</b><div class="ss">${starStr(Math.round(e.avg))}</div><button class="del">excluir</button></div>`;
+    const del = el.querySelector('.del');
+    del.onclick = () => {
+      if(del.classList.contains('confirm')){ deleteEntry(e.id, true); return; }
+      del.classList.add('confirm'); del.textContent = 'confirmar?';
+      setTimeout(() => { del.classList.remove('confirm'); del.textContent = 'excluir'; }, 3000);
+    };
+    box.appendChild(el);
+  });
+}
+$('#btnRanking').onclick = () => { renderRanking(); $('#rankModal').classList.remove('hidden'); };
+$('#rankClose').onclick = () => $('#rankModal').classList.add('hidden');
+$('#rankModal').onclick = e => { if(e.target.id === 'rankModal') $('#rankModal').classList.add('hidden'); };
+$('#rankTabs').onclick = e => {
+  const f = e.target.dataset.f; if(!f) return;
+  S.filter = f; [...$('#rankTabs').children].forEach(b => b.classList.toggle('on', b.dataset.f === f)); renderRanking();
+};
+$('#bExport').onclick = () => {
+  const blob = new Blob([JSON.stringify(S.rank, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `cine-gj-ranking-${today()}.json`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+$('#bImport').onchange = async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{ const data = JSON.parse(await f.text()); mergeRanking(data); send({ t: 'rank-sync', ranking: S.rank }); toast('Backup importado 💾'); }
+  catch(err){ toast('Arquivo inválido'); }
+  e.target.value = '';
+};
+</script>
+</body>
+</html>
