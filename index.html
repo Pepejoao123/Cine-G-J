@@ -211,6 +211,12 @@ header .sp{flex:1}
 .room button:disabled{background:#4a2333;opacity:.7}
 .room-empty{padding:18px;text-align:center;color:var(--muted);font-style:italic;font-size:14px;border:1px dashed var(--line);border-radius:16px}
 .link{background:none;color:var(--muted);font-size:12px;margin-top:14px;text-decoration:underline}
+.inv-text{font-size:15px;line-height:1.6;margin-bottom:18px;color:var(--muted)}
+.inv-room{font-family:'Playfair Display',serif;font-style:italic;font-size:24px;color:var(--cream)}
+.warn{font-size:13px;color:var(--gold);background:rgba(245,193,108,.08);border:1px solid rgba(245,193,108,.3);border-radius:12px;padding:10px 12px;line-height:1.4;margin-top:6px}
+.b-wa{flex:1;padding:13px;border-radius:14px;font-weight:700;background:#1fa855;color:#fff;text-align:center;text-decoration:none}
+#inviteLink{width:100%;font-size:12px}
+@media (max-width:600px){ header{flex-wrap:wrap;gap:8px;padding:8px 12px} header .sp{display:none} .hbtn{padding:7px 10px;font-size:12px} .pill{font-size:12px;padding:5px 9px} }
 </style>
 </head>
 <body>
@@ -245,6 +251,13 @@ header .sp{flex:1}
       </details>
     </div>
 
+    <!-- convite direto -->
+    <div id="stepInvite" class="hidden">
+      <p class="inv-text" id="inviteText"></p>
+      <div class="field"><label>Seu nome</label><input id="inInviteName" maxlength="20" placeholder="Como seu amor te chama?"></div>
+      <button class="btn-main" id="btnInvite">Entrar na sessão 💕</button>
+    </div>
+
     <!-- passo 2: salas ativas -->
     <div id="stepRooms" class="hidden">
       <div class="online" id="onlineBox"></div>
@@ -273,6 +286,7 @@ header .sp{flex:1}
     <div class="pill">🎟️ <span id="roomCode"></span></div>
     <div class="pill"><span class="dot wait" id="videoDot"></span><span id="videoText">vídeo: aguardando</span></div>
     <div class="sp"></div>
+    <button class="hbtn" id="btnInviteOpen">💌 Convidar</button>
     <button class="hbtn" id="btnRanking">🏆 Nosso ranking</button>
   </header>
 
@@ -341,6 +355,24 @@ header .sp{flex:1}
   </div>
 </div>
 
+<!-- ================= MODAL CONVITE ================= -->
+<div class="modal hidden" id="inviteModal">
+  <div class="mcard">
+    <h2>Convide seu amor 💌</h2>
+    <p class="sub">Quem abrir o link só precisa digitar o nome e já cai nesta sessão</p>
+    <div class="field"><input id="inviteLink" readonly></div>
+    <p class="warn hidden" id="fileWarn">⚠️ Você abriu o arquivo direto do computador, então esse link não abre no celular dela. Coloque o site no ar (GitHub Pages ou Netlify) e abra por lá para o convite funcionar.</p>
+    <div class="mactions">
+      <button class="b-pri" id="btnCopyInvite">Copiar link</button>
+      <a class="b-wa" id="inviteWa" href="#" target="_blank" rel="noopener">WhatsApp</a>
+    </div>
+    <div class="mactions">
+      <button class="b-sec hidden" id="btnShareNative">Compartilhar…</button>
+      <button class="b-sec" id="inviteClose">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ================= MODAL RANKING ================= -->
 <div class="modal hidden" id="rankModal">
   <div class="mcard rcard">
@@ -374,7 +406,7 @@ function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e)
 function rid(n){ const c='abcdefghjkmnpqrstuvwxyz23456789'; let s=''; for(let i=0;i<n;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
 
 const S = {
-  id: rid(10), me: '', ns: '', key: null, mq: null, brokerIdx: 0,
+  id: rid(10), me: '', ns: '', key: null, clients: [], pendingCandidates: [],
   presence: {},              // clientId -> {name, room, roomName, ts, seen}
   room: null, roomName: '', inRoom: false,
   partnerId: null, partner: '', partnerCamId: null, remoteScreenId: null,
@@ -426,16 +458,21 @@ async function decrypt(str){
   return JSON.parse(TD.decode(pt));
 }
 
-/* ---------- MQTT (lobby, mensagens e sinalização) ---------- */
+/* ---------- MQTT (lobby, mensagens e sinalização) ----------
+   Conecta em TODOS os servidores ao mesmo tempo: assim os dois sempre se encontram,
+   mesmo que a internet de um bloqueie algum servidor. Mensagens repetidas são ignoradas. */
 let pubChain = Promise.resolve(), recvChain = Promise.resolve();
+const seenMids = new Set();
+function live(){ return S.clients.filter(c => c.connected); }
+function anyConnected(){ return live().length > 0; }
 function pub(topic, obj, opts = {}){
   pubChain = pubChain.then(async () => {
-    if(!S.mq) return;
-    const payload = await encrypt(obj);
-    S.mq.publish(topic, payload, { qos: 1, ...opts });
+    const payload = await encrypt({ ...obj, mid: rid(12) });
+    live().forEach(c => c.publish(topic, payload, { qos: 1, ...opts }));
   }).catch(e => console.warn('pub', e));
   return pubChain;
 }
+function pubRaw(topic, payload, opts){ live().forEach(c => { try{ c.publish(topic, payload, opts); }catch(e){} }); }
 const T = {
   pres: id => `${S.ns}/p/${id}`,
   presAll: () => `${S.ns}/p/+`,
@@ -443,37 +480,40 @@ const T = {
   sig: (room, to) => `${S.ns}/r/${room}/s/${to}`
 };
 
-function connectBroker(){
+let onFirstConnect = null;
+function connectBrokers(){
   if(typeof mqtt === 'undefined'){ lobbyStatus('Não consegui carregar a conexão. Verifique a internet e recarregue.'); return; }
-  if(S.mq){ try{ S.mq.end(true); }catch(e){} }
-  const url = BROKERS[S.brokerIdx % BROKERS.length];
+  if(S.clients.length) return;
   lobbyStatus('Conectando…');
-  const c = mqtt.connect(url, {
-    clientId: 'cgj_' + S.id, clean: true, keepalive: 20, reconnectPeriod: 3000, connectTimeout: 8000,
-    will: { topic: T.pres(S.id), payload: '', retain: true, qos: 1 }
-  });
-  S.mq = c;
-  let ok = false;
-  const fail = setTimeout(() => { if(!ok){ S.brokerIdx++; connectBroker(); } }, 10000);
-  c.on('connect', () => {
-    ok = true; clearTimeout(fail);
-    $('#brokerDot').className = 'dot on';
-    lobbyStatus('');
-    c.subscribe(T.presAll(), { qos: 1 });
-    if(S.room) subscribeRoom(S.room);
-    publishPresence();
-  });
-  c.on('reconnect', () => { $('#brokerDot').className = 'dot wait'; });
-  c.on('offline', () => { $('#brokerDot').className = 'dot wait'; if(S.inRoom) setChatState(false); });
-  c.on('error', e => console.warn('mqtt', e));
-  c.on('message', (topic, payload) => {
-    recvChain = recvChain.then(() => onMqtt(topic, payload.toString())).catch(e => console.warn('recv', e));
+  const failTimer = setTimeout(() => { if(!anyConnected()) lobbyStatus('Não consegui conectar. Verifique a internet (redes de empresa costumam bloquear).'); }, 15000);
+  BROKERS.forEach((url, i) => {
+    const c = mqtt.connect(url, {
+      clientId: 'cgj_' + S.id + '_' + i, clean: true, keepalive: 20, reconnectPeriod: 3000, connectTimeout: 10000,
+      will: { topic: T.pres(S.id), payload: '', retain: true, qos: 1 }
+    });
+    S.clients.push(c);
+    c.on('connect', () => {
+      clearTimeout(failTimer);
+      updateBrokerDot(); lobbyStatus('');
+      c.subscribe(T.presAll(), { qos: 1 });
+      if(S.room) c.subscribe([T.msg(S.room), T.sig(S.room, S.id)], { qos: 1 });
+      publishPresence();
+      if(onFirstConnect){ const f = onFirstConnect; onFirstConnect = null; f(); }
+    });
+    c.on('reconnect', updateBrokerDot);
+    c.on('offline', () => { updateBrokerDot(); if(S.inRoom && !anyConnected()) setChatState(false); });
+    c.on('error', e => console.warn('mqtt', url, e && e.message));
+    c.on('message', (topic, payload, packet) => {
+      const str = payload.toString(), retained = !!(packet && packet.retain);
+      recvChain = recvChain.then(() => onMqtt(topic, str, retained)).catch(e => console.warn('recv', e));
+    });
   });
 }
-function subscribeRoom(room){ S.mq.subscribe([T.msg(room), T.sig(room, S.id)], { qos: 1 }); }
-function unsubscribeRoom(room){ try{ S.mq.unsubscribe([T.msg(room), T.sig(room, S.id)]); }catch(e){} }
+function updateBrokerDot(){ $('#brokerDot').className = 'dot ' + (anyConnected() ? 'on' : 'wait'); }
+function subscribeRoom(room){ live().forEach(c => c.subscribe([T.msg(room), T.sig(room, S.id)], { qos: 1 })); }
+function unsubscribeRoom(room){ live().forEach(c => { try{ c.unsubscribe([T.msg(room), T.sig(room, S.id)]); }catch(e){} }); }
 function publishPresence(){
-  if(!S.mq || !S.mq.connected) return;
+  if(!anyConnected()) return;
   pub(T.pres(S.id), { name: S.me, room: S.room, roomName: S.roomName, ts: Date.now() }, { retain: true });
   if(S.inRoom) setChatState(true);
 }
@@ -484,14 +524,15 @@ setInterval(() => {   // limpa quem sumiu
   if(changed){ renderRooms(); checkPartner(); }
 }, 10000);
 
-async function onMqtt(topic, str){
+async function onMqtt(topic, str, retained){
   const parts = topic.split('/');
   // presença: ns/p/<id>
   if(parts[2] === 'p'){
     const id = parts[3]; if(id === S.id) return;
     if(!str){ delete S.presence[id]; renderRooms(); checkPartner(); return; }
     let p; try{ p = await decrypt(str); }catch(e){ return; }
-    if(Math.abs(Date.now() - (p.ts || 0)) > FRESH_MS * 1.5) return; // registro velho
+    if(retained && Date.now() - (p.ts || 0) > 5 * 60000) return; // registro muito velho
+    if(S.presence[id] && (p.ts || 0) < (S.presence[id].ts || 0)) return; // cópia atrasada de outro servidor
     p.seen = Date.now(); S.presence[id] = p;
     renderRooms(); checkPartner();
     return;
@@ -499,6 +540,7 @@ async function onMqtt(topic, str){
   if(parts[2] !== 'r' || parts[3] !== S.room) return;
   let d; try{ d = await decrypt(str); }catch(e){ return; }
   if(!d || d.from === S.id) return;
+  if(d.mid){ if(seenMids.has(d.mid)) return; seenMids.add(d.mid); if(seenMids.size > 3000) seenMids.clear(); }
   if(parts[4] === 's') await onSignal(d);
   else onData(d);
 }
@@ -512,31 +554,84 @@ $('#btnTurnSave').onclick = () => {
   store('cinegj-turn', { url: $('#turnUrl').value.trim(), user: $('#turnUser').value.trim(), pass: $('#turnPass').value });
   toast('Servidor TURN salvo ✔');
 };
-$('#btnLogin').onclick = login;
+$('#btnLogin').onclick = () => login();
 $('#inSecret').addEventListener('keydown', e => { if(e.key === 'Enter') login(); });
-async function login(){
-  const name = $('#inName').value.trim(), secret = $('#inSecret').value;
-  if(!name){ lobbyStatus('Coloca seu nome 💕'); return; }
-  if(secret.length < 4){ lobbyStatus('A palavra secreta precisa ter pelo menos 4 caracteres'); return; }
-  if(!window.crypto || !crypto.subtle){ lobbyStatus('Abra pelo Chrome/Edge em um endereço https (ou o arquivo direto no computador).'); return; }
+function normSecret(s){ return (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+async function login(opts = {}){
+  const name = (opts.name ?? $('#inName').value).trim();
+  const secret = normSecret(opts.secret ?? $('#inSecret').value);
+  if(!name){ lobbyStatus('Coloca seu nome 💕'); return false; }
+  if(secret.length < 4){ lobbyStatus('A palavra secreta precisa ter pelo menos 4 caracteres'); return false; }
+  if(!window.crypto || !crypto.subtle){ lobbyStatus('Abra o site por um endereço https:// (não funciona abrindo o arquivo pelo WhatsApp/visualizador).'); return false; }
   S.me = name; store('cinegj-name', name); store('cinegj-secret', secret);
   $('#btnLogin').disabled = true;
   await setupCrypto(secret);
-  $('#stepLogin').classList.add('hidden'); $('#stepRooms').classList.remove('hidden');
+  $('#stepLogin').classList.add('hidden'); $('#stepInvite').classList.add('hidden');
+  if(!opts.silent) $('#stepRooms').classList.remove('hidden');
   renderRooms();
-  connectBroker();
+  connectBrokers();
+  return true;
 }
 $('#btnLogout').onclick = () => {
   store('cinegj-secret', '');
-  if(S.mq){ S.mq.publish(T.pres(S.id), '', { retain: true, qos: 1 }); }
-  setTimeout(() => location.reload(), 300);
+  pubRaw(T.pres(S.id), '', { retain: true, qos: 1 });
+  setTimeout(() => { location.hash = ''; location.reload(); }, 300);
 };
 $('#btnCreate').onclick = () => {
   const name = $('#inRoomName').value.trim() || 'Sessão de hoje 🍿';
   joinRoom(rid(8), name);
 };
 $('#inRoomName').addEventListener('keydown', e => { if(e.key === 'Enter') $('#btnCreate').click(); });
-if($('#inName').value && $('#inSecret').value) login();   // entra direto se já tiver salvo
+
+/* ---------- CONVITE ---------- */
+function b64url(str){ return b64(TE.encode(str)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function unb64url(s){ s = s.replace(/-/g, '+').replace(/_/g, '/'); while(s.length % 4) s += '='; return TD.decode(unb64(s)); }
+function parseInvite(){
+  const h = location.hash;
+  if(!h.startsWith('#convite-')) return null;
+  try{ const d = JSON.parse(unb64url(h.slice(9))); return (d.r && d.k) ? d : null; }catch(e){ return null; }
+}
+function inviteLink(){
+  const base = location.origin + location.pathname;
+  return base + '#convite-' + b64url(JSON.stringify({ r: S.room, n: S.roomName, k: load('cinegj-secret', ''), f: S.me }));
+}
+const INVITE = parseInvite();
+if(INVITE){
+  $('#stepLogin').classList.add('hidden'); $('#stepInvite').classList.remove('hidden');
+  $('#inviteText').innerHTML = `💌 <b>${esc(INVITE.f || 'Seu amor')}</b> te convidou para<br><span class="inv-room">${esc(INVITE.n || 'uma sessão')}</span>`;
+  $('#inInviteName').value = load('cinegj-name', '');
+  const go = async () => {
+    const name = $('#inInviteName').value.trim();
+    if(!name){ lobbyStatus('Coloca seu nome 💕'); return; }
+    $('#btnInvite').disabled = true;
+    lobbyStatus('Ligando câmera e microfone…');
+    if(!S.local) S.local = await getLocalMedia();
+    const ok = await login({ name, secret: INVITE.k, silent: true });
+    if(!ok){ $('#btnInvite').disabled = false; return; }
+    lobbyStatus('Entrando na sessão…');
+    const enter = () => { history.replaceState(null, '', location.pathname); joinRoom(INVITE.r, INVITE.n || 'Nossa sessão'); };
+    if(anyConnected()) enter(); else onFirstConnect = enter;
+  };
+  $('#btnInvite').onclick = go;
+  $('#inInviteName').addEventListener('keydown', e => { if(e.key === 'Enter') go(); });
+}else if($('#inName').value && $('#inSecret').value){
+  login();   // entra direto se já tiver salvo
+}
+
+$('#btnInviteOpen').onclick = () => {
+  const link = inviteLink();
+  $('#inviteLink').value = link;
+  $('#inviteWa').href = 'https://wa.me/?text=' + encodeURIComponent('Vem assistir comigo no Cine G+J 🍿💕 ' + link);
+  $('#fileWarn').classList.toggle('hidden', location.protocol.startsWith('http'));
+  $('#btnShareNative').classList.toggle('hidden', !navigator.share);
+  $('#inviteModal').classList.remove('hidden');
+};
+$('#btnCopyInvite').onclick = async () => {
+  try{ await navigator.clipboard.writeText($('#inviteLink').value); toast('Link copiado! Manda pro seu amor 💌'); }
+  catch(e){ $('#inviteLink').select(); toast('Selecionei o link — é só copiar'); }
+};
+$('#btnShareNative').onclick = () => { navigator.share({ title: 'Cine G+J', text: 'Vem assistir comigo 🍿💕', url: $('#inviteLink').value }).catch(()=>{}); };
+$('#inviteClose').onclick = () => $('#inviteModal').classList.add('hidden');
 
 function roomsMap(){
   const rooms = {};
@@ -592,7 +687,7 @@ function withBlankVideo(stream){
 
 /* ---------- ENTRAR / SAIR DA SALA ---------- */
 async function joinRoom(id, name){
-  if(!S.mq || !S.mq.connected){ toast('Ainda conectando… tente em instantes'); return; }
+  if(!anyConnected()){ toast('Ainda conectando… tente em instantes'); return; }
   if(!S.local){
     lobbyStatus('Ligando câmera e microfone…');
     S.local = await getLocalMedia();
@@ -627,7 +722,7 @@ function leaveRoom(){
 }
 $('#btnLeave').onclick = leaveRoom;
 window.addEventListener('beforeunload', () => {
-  if(S.mq && S.mq.connected) S.mq.publish(T.pres(S.id), '', { retain: true, qos: 0 });
+  pubRaw(T.pres(S.id), '', { retain: true, qos: 0 });
 });
 
 function send(obj){ if(S.room) pub(T.msg(S.room), { ...obj, from: S.id }); }
@@ -679,10 +774,12 @@ function sig(obj){ if(S.room && S.partnerId) pub(T.sig(S.room, S.partnerId), { .
 function createPC(){
   closePC();
   const pc = new RTCPeerConnection(iceConfig());
-  S.pc = pc; S.polite = S.id < S.partnerId; S.makingOffer = false; S.ignoreOffer = false; S.remoteStreams = {};
+  S.pc = pc; S.pendingCandidates = []; S.polite = S.id < S.partnerId; S.makingOffer = false; S.ignoreOffer = false; S.remoteStreams = {};
   setVideo('conectando');
-  S.local.getTracks().forEach(t => pc.addTrack(t, S.local));
-  if(S.screen){ S.screenSenders = S.screen.getTracks().map(t => pc.addTrack(t, S.screen)); boostQuality(); }
+  // Só um lado (o "impolite") faz a primeira oferta; o outro adiciona as faixas ao recebê-la.
+  // Isso evita a colisão de ofertas que travava a conexão.
+  S.needLocalTracks = S.polite;
+  if(!S.polite) addLocalTracks(pc);
   pc.onnegotiationneeded = async () => {
     try{ S.makingOffer = true; await pc.setLocalDescription(); sig({ description: pc.localDescription.toJSON() }); }
     catch(e){ console.warn('nego', e); }
@@ -709,6 +806,10 @@ function createPC(){
     else if(st === 'disconnected') setVideo('reconectando');
   };
 }
+function addLocalTracks(pc){
+  S.local.getTracks().forEach(t => pc.addTrack(t, S.local));
+  if(S.screen){ S.screenSenders = S.screen.getTracks().map(t => pc.addTrack(t, S.screen)); boostQuality(); }
+}
 function closePC(){
   if(S.pc){ try{ S.pc.close(); }catch(e){} S.pc = null; }
   S.screenSenders = []; S.remoteStreams = {};
@@ -725,11 +826,15 @@ async function onSignal(d){
       S.ignoreOffer = !S.polite && offerCollision;
       if(S.ignoreOffer) return;
       await pc.setRemoteDescription(d.description);
+      const pend = S.pendingCandidates; S.pendingCandidates = [];
+      for(const c of pend){ try{ await pc.addIceCandidate(c); }catch(e){} }
       if(d.description.type === 'offer'){
+        if(S.needLocalTracks){ S.needLocalTracks = false; addLocalTracks(pc); }
         await pc.setLocalDescription();
         sig({ description: pc.localDescription.toJSON() });
       }
     }else if(d.candidate){
+      if(!pc.remoteDescription){ S.pendingCandidates.push(d.candidate); return; }
       try{ await pc.addIceCandidate(d.candidate); }catch(e){ if(!S.ignoreOffer) console.warn('ice', e); }
     }
   }catch(e){ console.warn('signal', e); }
@@ -792,7 +897,7 @@ async function startShare(){
   const v = $('#stageVideo'); v.srcObject = S.screen; v.muted = true; v.play().catch(()=>{});
   showStage('local');
   $('#btnShare').classList.add('active');
-  if(S.pc){ S.screenSenders = S.screen.getTracks().map(t => S.pc.addTrack(t, S.screen)); boostQuality(); }
+  if(S.pc && !S.needLocalTracks){ S.screenSenders = S.screen.getTracks().map(t => S.pc.addTrack(t, S.screen)); boostQuality(); }
   send({ t: 'screen-start', sid: S.screen.id, name: S.me });
   addChat(null, 'Você começou a sessão 🎬');
 }
